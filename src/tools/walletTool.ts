@@ -31,7 +31,7 @@ const publicClient = createPublicClient({
  * - sfrxETH token balance
  * - Warns if gas is low
  */
-export const checkFraxtalBalance = createTool({
+const _checkFraxtalBalanceRaw = createTool({
   name: "check_fraxtal_balance",
   description: `Check a user's real wallet balance on Fraxtal Mainnet (Chain ID: 252).
   
@@ -202,3 +202,39 @@ export function formatBalance(wei: bigint, decimals: number = 18): string {
   const formatted = formatEther(wei);
   return parseFloat(formatted).toFixed(decimals === 18 ? 6 : 4);
 }
+
+// ============================================================================
+// COMPATIBILITY WRAPPER
+// ============================================================================
+// Ensures exported checkFraxtalBalance has a .fn method regardless of how
+// createTool() shapes its return value (function, object, module namespace)
+// ============================================================================
+
+const _exportCandidate = _checkFraxtalBalanceRaw;
+
+/**
+ * Resolve the callable function from various tool shapes
+ */
+function resolveFn(obj: any): ((args: any) => Promise<any>) | undefined {
+  if (typeof obj === "function") return obj;
+  if (obj && typeof obj.func === "function") return obj.func.bind(obj);
+  if (obj && typeof obj.fn === "function") return obj.fn.bind(obj);
+  if (obj && typeof obj.run === "function") return obj.run.bind(obj);
+  if (obj && typeof obj.execute === "function") return obj.execute.bind(obj);
+  if (obj && typeof obj.handler === "function") return obj.handler.bind(obj);
+  if (obj && obj.default) return resolveFn(obj.default);
+  return undefined;
+}
+
+const resolvedFn = resolveFn(_exportCandidate);
+
+// Ensure the tool has .fn callable (for backwards compatibility with tests)
+if (resolvedFn && typeof (_exportCandidate as any).fn !== "function") {
+  (_exportCandidate as any).fn = resolvedFn;
+}
+
+// Export the tool with .fn added
+export const checkFraxtalBalance = _exportCandidate;
+
+// Also provide a default export for consumers using default import
+export default _exportCandidate as any;

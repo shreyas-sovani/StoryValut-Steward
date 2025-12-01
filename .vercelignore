@@ -1,0 +1,26 @@
+# Development files
+node_modules/
+.env
+.env.test
+*.log
+
+# Test files
+test-*.ts
+test-*.js
+
+# Documentation
+*.md
+!README.md
+
+# Project context
+project_context/
+
+# Git
+.git/
+.gitignore
+
+# Scripts
+start-dev.sh
+
+# Frontend (deployed separately)
+frontend/

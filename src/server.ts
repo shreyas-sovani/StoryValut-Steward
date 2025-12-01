@@ -196,3 +196,18 @@ serve({
   console.log(`        -H "Content-Type: application/json" \\`);
   console.log(`        -d '{"message":"Hello, I need help with DeFi"}'\n`);
 });
+
+// ============================================================================
+// VERCEL SERVERLESS EXPORTS
+// ============================================================================
+// Export handlers for Vercel Edge/Serverless deployment
+// These allow Vercel to handle the Hono app as serverless functions
+// ============================================================================
+
+export default app;
+export const GET = app.fetch;
+export const POST = app.fetch;
+export const PUT = app.fetch;
+export const DELETE = app.fetch;
+export const PATCH = app.fetch;
+export const OPTIONS = app.fetch;

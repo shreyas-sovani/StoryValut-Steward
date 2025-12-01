@@ -9,6 +9,47 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// ============================================================================
+// RESILIENT TOOL CALLER
+// ============================================================================
+// Handles various tool shapes: function, .fn, .run, .execute, .handler, .default
+// ============================================================================
+
+function isObject(x: any): x is Record<string, any> {
+  return typeof x === "object" && x !== null;
+}
+
+async function callTool(tool: any, args: any) {
+  // direct function
+  if (typeof tool === "function") return await tool(args);
+
+  // if module namespace with default
+  if (isObject(tool) && typeof tool.default === "function") {
+    return await tool.default(args);
+  }
+
+  // common tool shapes (ADK uses 'func', others use 'fn', 'run', 'execute', 'handler')
+  const candidates = ["func", "fn", "run", "execute", "handler"];
+  for (const k of candidates) {
+    if (isObject(tool) && typeof tool[k] === "function") {
+      return await tool[k](args);
+    }
+  }
+
+  // if default is object, recurse
+  if (isObject(tool) && isObject(tool.default)) {
+    return await callTool(tool.default, args);
+  }
+
+  // Debug output to help root-cause if it fails
+  console.error("❌ Imported tool shape (not callable):", Object.keys(tool || {}));
+  throw new Error("Imported tool has no callable entrypoint (.func/.fn/.run/.execute or function)");
+}
+
+// ============================================================================
+// TEST SUITE
+// ============================================================================
+
 async function testWalletTool() {
   console.log("🧪 Testing Wallet Awareness Tool\n");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
@@ -33,8 +74,8 @@ async function testWalletTool() {
     console.log(`   Note: ${test.note}\n`);
 
     try {
-      // Call the tool's fn function directly
-      const result = await checkFraxtalBalance.fn({
+      // Call the tool using resilient helper
+      const result = await callTool(checkFraxtalBalance, {
         walletAddress: test.address,
       });
 
@@ -68,7 +109,7 @@ async function testWalletTool() {
   // Test invalid address
   console.log("🧪 Testing Invalid Address Format\n");
   try {
-    const result = await checkFraxtalBalance.fn({
+    const result = await callTool(checkFraxtalBalance, {
       walletAddress: "invalid-address",
     });
     console.log("Result:", result);

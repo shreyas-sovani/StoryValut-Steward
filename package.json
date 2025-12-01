@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "description": "StoryVault Steward - DeFi advisor analyzing life stories for personalized Fraxtal yield strategies",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "dist/server.js",
   "scripts": {
     "start": "tsx src/cli.ts",
     "dev": "tsx watch src/cli.ts",
     "server": "tsx src/server.ts",
-    "server:dev": "tsx watch src/server.ts"
+    "server:dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "server:prod": "node dist/server.js"
   },
   "engines": {
     "node": ">=22.0.0"
