@@ -52,7 +52,7 @@ export default function ChatInterface({
           fullResponse += chunk.content;
           setStreamingContent(fullResponse);
 
-          // Check if this looks like a vault deployment JSON
+          // Check if this looks like a vault deployment JSON or strategy recommendation
           if (
             fullResponse.includes("agent_id") &&
             fullResponse.includes("tx_hash")
@@ -65,6 +65,60 @@ export default function ChatInterface({
               }
             } catch (e) {
               // Not valid JSON yet, continue streaming
+            }
+          }
+
+          // Also check for strategy recommendations with portfolio composition
+          // Look for mentions of sFRAX or sfrxETH with risk levels
+          if (
+            (fullResponse.toLowerCase().includes("sfrax") ||
+              fullResponse.toLowerCase().includes("sfrxeth")) &&
+            (fullResponse.toLowerCase().includes("recommend") ||
+              fullResponse.toLowerCase().includes("strategy") ||
+              fullResponse.toLowerCase().includes("vault"))
+          ) {
+            try {
+              // Create a mock vault data for visualization
+              const isLowRisk =
+                fullResponse.toLowerCase().includes("low risk") ||
+                fullResponse.toLowerCase().includes("risk-averse") ||
+                fullResponse.toLowerCase().includes("conservative") ||
+                fullResponse.toLowerCase().includes("sfrax vault");
+
+              const isMediumRisk =
+                fullResponse.toLowerCase().includes("medium risk") ||
+                fullResponse.toLowerCase().includes("sfrxeth vault") ||
+                fullResponse.toLowerCase().includes("balanced");
+
+              if (isLowRisk || isMediumRisk) {
+                const mockVaultData = {
+                  agent_id: "preview_" + Date.now(),
+                  tx_hash: "0x" + "0".repeat(64),
+                  atp_strategy_url: "https://app.iqai.com/",
+                  deployed_at: new Date().toISOString(),
+                  strategy_summary: {
+                    protocol: isLowRisk ? "sFRAX Vault" : "Balanced Strategy",
+                    apr: isLowRisk ? "4.5%" : "3.9-4.5%",
+                    risk_level: isLowRisk ? "Low" : "Medium",
+                    allocation: isLowRisk
+                      ? "100% Stable"
+                      : "40% Stable, 60% Growth",
+                  },
+                  portfolio_composition: isLowRisk
+                    ? [{ name: "sFRAX (Stable)", value: 100, color: "#00C49F" }]
+                    : [
+                        { name: "sFRAX (Stable)", value: 40, color: "#00C49F" },
+                        {
+                          name: "sfrxETH (Growth)",
+                          value: 60,
+                          color: "#FFBB28",
+                        },
+                      ],
+                };
+                onVaultDeployed?.(mockVaultData);
+              }
+            } catch (e) {
+              // Ignore parsing errors
             }
           }
         }
@@ -102,9 +156,9 @@ export default function ChatInterface({
   };
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-br from-gray-950 via-purple-950/20 to-gray-950">
+    <div className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-gray-950 via-purple-950/20 to-gray-950">
       {/* Header */}
-      <div className="border-b border-purple-500/20 bg-gray-900/50 backdrop-blur-sm">
+      <div className="flex-shrink-0 border-b border-purple-500/20 bg-gray-900/50 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-amber-500 flex items-center justify-center">
@@ -120,7 +174,7 @@ export default function ChatInterface({
         </div>
       </div>
 
-      {/* Messages */}
+      {/* Messages - Scrollable Area */}
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="max-w-4xl mx-auto space-y-6">
           {messages.length === 0 && (
@@ -202,8 +256,8 @@ export default function ChatInterface({
         </div>
       </div>
 
-      {/* Input */}
-      <div className="border-t border-purple-500/20 bg-gray-900/50 backdrop-blur-sm">
+      {/* Input - Fixed at Bottom */}
+      <div className="flex-shrink-0 border-t border-purple-500/20 bg-gray-900/50 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-6 py-4">
           <div className="flex gap-3">
             <textarea

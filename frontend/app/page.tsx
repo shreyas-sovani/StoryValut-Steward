@@ -12,10 +12,10 @@ export default function Home() {
   });
 
   return (
-    <main className="h-screen w-screen overflow-hidden bg-gray-950">
+    <main className="h-screen w-full overflow-hidden bg-[#030014]">
       <div className="h-full grid grid-cols-1 lg:grid-cols-2">
         {/* Chat Interface - Left Side */}
-        <div className="h-full border-r border-purple-500/20">
+        <div className="h-full flex flex-col overflow-hidden border-r border-purple-500/20">
           <ChatInterface
             sessionId={sessionId}
             onVaultDeployed={(data) => setVaultData(data)}
@@ -23,8 +23,8 @@ export default function Home() {
         </div>
 
         {/* Vault Card - Right Side */}
-        <div className="h-full bg-gradient-to-br from-gray-950 via-purple-950/10 to-gray-950">
-          <div className="border-b border-purple-500/20 bg-gray-900/50 backdrop-blur-sm">
+        <div className="h-full flex flex-col overflow-hidden bg-gradient-to-br from-gray-950 via-purple-950/10 to-gray-950">
+          <div className="border-b border-purple-500/20 bg-gray-900/50 backdrop-blur-sm flex-shrink-0">
             <div className="px-6 py-4">
               <h2 className="text-xl font-bold text-white">Your Vault</h2>
               <p className="text-sm text-purple-300">
@@ -32,7 +32,9 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <VaultCard vaultData={vaultData} />
+          <div className="flex-1 overflow-y-auto">
+            <VaultCard vaultData={vaultData} />
+          </div>
         </div>
       </div>
     </main>

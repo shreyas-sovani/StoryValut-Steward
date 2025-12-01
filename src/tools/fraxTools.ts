@@ -142,6 +142,10 @@ by reading the sfrxETH contract's totalSupply. Use this to provide users with tr
           ],
           minimum_timeline: "1 month",
           contract_info: "Staked FRAX earning protocol revenue",
+          // Visual composition for LOW RISK strategy
+          portfolio_composition: [
+            { name: "sFRAX (Stable)", value: 100, color: "#00C49F" },
+          ],
         },
         {
           vault_name: "sfrxETH Vault",
@@ -162,8 +166,23 @@ by reading the sfrxETH contract's totalSupply. Use this to provide users with tr
           ],
           minimum_timeline: "6 months",
           contract_info: "ERC-4626 vault earning ETH staking rewards + MEV",
+          // Visual composition for MEDIUM RISK strategy
+          portfolio_composition: [
+            { name: "sFRAX (Stable)", value: 40, color: "#00C49F" },
+            { name: "sfrxETH (Growth)", value: 60, color: "#FFBB28" },
+          ],
         },
       ],
+
+      // Portfolio composition for recommended strategy (for frontend chart)
+      // This makes it easy for the agent to pass the right chart data
+      recommended_composition: {
+        low_risk: [{ name: "sFRAX (Stable)", value: 100, color: "#00C49F" }],
+        medium_risk: [
+          { name: "sFRAX (Stable)", value: 40, color: "#00C49F" },
+          { name: "sfrxETH (Growth)", value: 60, color: "#FFBB28" },
+        ],
+      },
 
       // Additional context
       disclaimer: "APY rates are indicative and may fluctuate. sfrxETH exposes you to ETH price volatility. Always DYOR.",
