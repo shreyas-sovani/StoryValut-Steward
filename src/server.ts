@@ -18,8 +18,28 @@ const app = new Hono();
 const sessions = new Map<string, any>();
 
 // CORS configuration for frontend
+// Allow localhost (development) and Vercel (production)
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  /https:\/\/.*\.vercel\.app$/,  // Any Vercel deployment
+  "https://story-valut-steward.vercel.app",  // Your production domain
+];
+
 app.use("/*", cors({
-  origin: ["http://localhost:3000", "http://localhost:5173"],
+  origin: (origin) => {
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) return "*";
+    
+    // Check if origin matches any allowed pattern
+    const isAllowed = allowedOrigins.some((pattern) => {
+      if (typeof pattern === "string") return pattern === origin;
+      if (pattern instanceof RegExp) return pattern.test(origin);
+      return false;
+    });
+    
+    return isAllowed ? origin : allowedOrigins[0] as string;
+  },
   credentials: true,
 }));
 
