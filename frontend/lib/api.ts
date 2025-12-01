@@ -1,0 +1,151 @@
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+}
+
+export interface SSEEvent {
+  type: "start" | "content" | "end" | "error";
+  content?: string;
+  timestamp: string;
+  error?: string;
+}
+
+export interface SimpleChatResponse {
+  response: string;
+  sessionId: string;
+  timestamp: string;
+}
+
+/**
+ * Send a chat message with SSE streaming
+ */
+export async function sendChatMessage(
+  message: string,
+  sessionId: string,
+  onChunk: (chunk: SSEEvent) => void,
+  onComplete: () => void,
+  onError: (error: string) => void
+): Promise<void> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message, sessionId }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+
+    if (!reader) {
+      throw new Error("Response body is null");
+    }
+
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        onComplete();
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6);
+          if (data === "[DONE]") {
+            onComplete();
+            return;
+          }
+
+          try {
+            const event: SSEEvent = JSON.parse(data);
+            onChunk(event);
+          } catch (e) {
+            console.error("Failed to parse SSE event:", e);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    onError(error instanceof Error ? error.message : "Unknown error");
+  }
+}
+
+/**
+ * Send a chat message without streaming (simple mode)
+ */
+export async function sendSimpleChatMessage(
+  message: string,
+  sessionId: string = "default"
+): Promise<SimpleChatResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/chat/simple`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ message, sessionId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get list of active sessions
+ */
+export async function getSessions(): Promise<string[]> {
+  const response = await fetch(`${API_BASE_URL}/api/sessions`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.sessions;
+}
+
+/**
+ * Delete a session
+ */
+export async function deleteSession(sessionId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/session/${sessionId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+}
+
+/**
+ * Check API health
+ */
+export async function checkHealth(): Promise<{
+  status: string;
+  service: string;
+  version: string;
+  fraxtal: { chain_id: number; rpc: string };
+}> {
+  const response = await fetch(`${API_BASE_URL}/health`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
