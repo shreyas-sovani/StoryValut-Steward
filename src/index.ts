@@ -1,5 +1,6 @@
 import { AgentBuilder } from "@iqai/adk";
 import { get_frax_yields } from "./tools/fraxTools.js";
+import { deploy_story_vault } from "./tools/atpTools.js";
 import dotenv from "dotenv";
 import * as readline from "readline/promises";
 import { stdin as input, stdout as output } from "process";
@@ -56,9 +57,28 @@ You operate on Fraxtal (Chain ID: 252), an Ethereum L2 that uses FRAX as the nat
 - sFRAX: Staked FRAX stablecoin (safe, predictable)
 - sfrxETH: Staked frxETH liquid staking derivative (ETH exposure, moderate risk)
 
-Remember: Behind every wallet is a human with dreams. Treat their money like you would your own family's.`
+Remember: Behind every wallet is a human with dreams. Treat their money like you would your own family's.
+
+## CLOSING PHASE (Deployment)
+If the user EXPLICITLY AGREES to proceed with the strategy (e.g., "yes, let's do it", "I'm ready", "deploy it"), YOU MUST:
+1. **Generate a creative Vault Name** based on their story:
+   - Example: "Seoul Gallery Fund" for an artist saving for an exhibition
+   - Example: "Emergency Safety Vault" for someone building an emergency fund
+   - Make it personal and memorable
+2. **Call the deploy_story_vault tool** with:
+   - vault_name: Your creative name
+   - strategy_asset: The chosen asset (sFRAX or sfrxETH)
+   - target_amount: Their financial goal with currency
+   - user_story_summary: Brief 1-sentence summary of their story
+3. **Present the results** to the user:
+   - Congratulate them on taking action
+   - Share the ATP agent link and Fraxscan explorer link
+   - Provide clear next steps for depositing funds
+   - Make it feel like a celebration moment
+
+IMPORTANT: Only deploy if they explicitly agree. Don't be pushy. Respect their decision-making process.`
     )
-    .withTools(get_frax_yields)
+    .withTools(get_frax_yields, deploy_story_vault)
     .build();
 
   console.log("✅ StorySteward is ready and connected!\n");
