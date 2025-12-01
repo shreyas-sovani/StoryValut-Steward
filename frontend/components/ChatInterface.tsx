@@ -122,7 +122,31 @@ export default function ChatInterface({
 
   // Parse monitoring events from agent responses
   const detectMonitoringEvent = (content: string) => {
-    // Check for Stewardship Mode activation
+    // Check for NEW Stewardship Mode activation (start_stewardship tool)
+    if (content.includes("🛡️") && content.includes("STEWARDSHIP MODE ACTIVATED")) {
+      const strategyMatch = content.match(/Strategy:\s*([^\n]+)/i);
+      const targetAPYMatch = content.match(/Target APY:\s*([\d.]+)%/i);
+      
+      if (strategyMatch && targetAPYMatch) {
+        // Extract asset from strategy name
+        let asset = "sFRAX";
+        if (strategyMatch[1].toLowerCase().includes("sfrxeth")) {
+          asset = "sfrxETH";
+        }
+        
+        const newMonitoring: MonitoringData = {
+          active: true,
+          asset,
+          currentYield: parseFloat(targetAPYMatch[1]),
+          targetYield: parseFloat(targetAPYMatch[1]),
+          yieldHistory: [{ timestamp: Date.now(), yield: parseFloat(targetAPYMatch[1]) }],
+        };
+        setMonitoring(newMonitoring);
+        return;
+      }
+    }
+    
+    // Check for OLD Stewardship Mode activation (backward compatibility)
     if (content.includes("🛡️") && content.includes("Stewardship Mode Activated")) {
       const assetMatch = content.match(/(sFRAX|sfrxETH)/i);
       const apyMatch = content.match(/Target APY:\s*([\d.]+)%/i);
@@ -484,43 +508,91 @@ export default function ChatInterface({
         </div>
       </div>
 
-      {/* Input - Fixed at Bottom */}
+      {/* Input / Live Terminal - Fixed at Bottom */}
       <div className="flex-shrink-0 border-t border-purple-500/20 bg-gray-900/50 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-6 py-4">
-          <div className="flex gap-3">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Share your story, dreams, and financial goals..."
-              rows={1}
-              className="flex-1 px-4 py-3 bg-gray-800/50 border border-purple-500/30 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 resize-none"
-              disabled={isLoading}
-            />
-            <button
-              onClick={handleSend}
-              disabled={isLoading || !input.trim()}
-              className={cn(
-                "px-6 py-3 rounded-xl font-medium transition-all",
-                "bg-gradient-to-r from-purple-600 to-amber-600",
-                "hover:from-purple-500 hover:to-amber-500",
-                "disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed",
-                "flex items-center gap-2 text-white"
-              )}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Thinking</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-5 h-5" />
-                  <span>Send</span>
-                </>
-              )}
-            </button>
-          </div>
+          {monitoring.active ? (
+            /* Live Terminal Mode */
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-sm font-mono text-green-400">
+                    Autonomous Steward Active
+                  </span>
+                </div>
+                <span className="text-xs text-gray-500 font-mono">
+                  Monitoring {monitoring.asset}
+                </span>
+              </div>
+              
+              <div className="bg-black/50 border border-green-500/30 rounded-lg p-4 font-mono text-sm">
+                <div className="space-y-1 text-green-400">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-500">▸</span>
+                    <span>Scanning Fraxtal blocks...</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-500">▸</span>
+                    <span>Checking APY: {monitoring.currentYield.toFixed(2)}%</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-500">▸</span>
+                    <span>
+                      Status:{" "}
+                      {Math.abs(monitoring.currentYield - monitoring.targetYield) < 0.3
+                        ? "✅ Healthy"
+                        : "⚠️ Monitoring"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <span>▸</span>
+                    <span>Next check: 10 seconds...</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="text-xs text-gray-500 text-center">
+                Your Steward is watching. You can still ask questions above.
+              </div>
+            </div>
+          ) : (
+            /* Normal Chat Input */
+            <div className="flex gap-3">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Share your story, dreams, and financial goals..."
+                rows={1}
+                className="flex-1 px-4 py-3 bg-gray-800/50 border border-purple-500/30 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 resize-none"
+                disabled={isLoading}
+              />
+              <button
+                onClick={handleSend}
+                disabled={isLoading || !input.trim()}
+                className={cn(
+                  "px-6 py-3 rounded-xl font-medium transition-all",
+                  "bg-gradient-to-r from-purple-600 to-amber-600",
+                  "hover:from-purple-500 hover:to-amber-500",
+                  "disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed",
+                  "flex items-center gap-2 text-white"
+                )}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Thinking</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-5 h-5" />
+                    <span>Send</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
