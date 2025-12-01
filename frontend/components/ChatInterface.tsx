@@ -1,23 +1,46 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Sparkles } from "lucide-react";
+import { Send, Loader2, Sparkles, Activity } from "lucide-react";
 import { sendChatMessage, type ChatMessage, type SSEEvent } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+interface MonitoringData {
+  active: boolean;
+  asset: string;
+  currentYield: number;
+  targetYield: number;
+  yieldHistory: { timestamp: number; yield: number }[];
+  lastAlert?: {
+    type: "yield_alert" | "yield_recovered" | "monitoring_update";
+    message: string;
+    severity: "info" | "warning" | "critical";
+    timestamp: string;
+  };
+}
 
 interface ChatInterfaceProps {
   sessionId: string;
   onVaultDeployed?: (vaultData: any) => void;
+  onMonitoringUpdate?: (monitoringData: MonitoringData) => void;
 }
 
 export default function ChatInterface({
   sessionId,
   onVaultDeployed,
+  onMonitoringUpdate,
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [monitoring, setMonitoring] = useState<MonitoringData>({
+    active: false,
+    asset: "",
+    currentYield: 0,
+    targetYield: 0,
+    yieldHistory: [],
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -27,6 +50,162 @@ export default function ChatInterface({
   useEffect(() => {
     scrollToBottom();
   }, [messages, streamingContent]);
+
+  // Notify parent of monitoring updates
+  useEffect(() => {
+    if (monitoring.active && onMonitoringUpdate) {
+      onMonitoringUpdate(monitoring);
+    }
+  }, [monitoring, onMonitoringUpdate]);
+
+  // Listen for "Hire Steward" button clicks
+  useEffect(() => {
+    const handleHireSteward = (event: CustomEvent) => {
+      const message = event.detail.message;
+      // Directly trigger the send action
+      const userMessage: ChatMessage = {
+        role: "user",
+        content: message,
+        timestamp: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, userMessage]);
+      setIsLoading(true);
+      setStreamingContent("");
+
+      let fullResponse = "";
+
+      sendChatMessage(
+        message,
+        sessionId,
+        (chunk) => {
+          if (chunk.type === "content" && chunk.content) {
+            fullResponse += chunk.content;
+            setStreamingContent(fullResponse);
+            detectMonitoringEvent(fullResponse);
+          }
+        },
+        () => {
+          const assistantMessage: ChatMessage = {
+            role: "assistant",
+            content: fullResponse,
+            timestamp: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, assistantMessage]);
+          setStreamingContent("");
+          setIsLoading(false);
+        },
+        (error) => {
+          const errorMessage: ChatMessage = {
+            role: "assistant",
+            content: `Error: ${error}`,
+            timestamp: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, errorMessage]);
+          setStreamingContent("");
+          setIsLoading(false);
+        }
+      );
+    };
+
+    window.addEventListener(
+      "hireSteward",
+      handleHireSteward as EventListener
+    );
+    return () => {
+      window.removeEventListener(
+        "hireSteward",
+        handleHireSteward as EventListener
+      );
+    };
+  }, [sessionId]);
+
+  // Parse monitoring events from agent responses
+  const detectMonitoringEvent = (content: string) => {
+    // Check for Stewardship Mode activation
+    if (content.includes("🛡️") && content.includes("Stewardship Mode Activated")) {
+      const assetMatch = content.match(/(sFRAX|sfrxETH)/i);
+      const apyMatch = content.match(/Target APY:\s*([\d.]+)%/i);
+      
+      if (assetMatch && apyMatch) {
+        const newMonitoring: MonitoringData = {
+          active: true,
+          asset: assetMatch[1],
+          currentYield: parseFloat(apyMatch[1]),
+          targetYield: parseFloat(apyMatch[1]),
+          yieldHistory: [{ timestamp: Date.now(), yield: parseFloat(apyMatch[1]) }],
+        };
+        setMonitoring(newMonitoring);
+        return;
+      }
+    }
+
+    // Check for yield alerts
+    if (monitoring.active && (content.includes("⚠️") || content.includes("YIELD ALERT"))) {
+      const yieldMatch = content.match(/(\d+\.?\d*)%/);
+      if (yieldMatch) {
+        const currentYield = parseFloat(yieldMatch[1]);
+        setMonitoring((prev) => ({
+          ...prev,
+          currentYield,
+          yieldHistory: [
+            ...prev.yieldHistory,
+            { timestamp: Date.now(), yield: currentYield },
+          ].slice(-20), // Keep last 20 data points
+          lastAlert: {
+            type: "yield_alert",
+            message: content,
+            severity: "critical",
+            timestamp: new Date().toISOString(),
+          },
+        }));
+      }
+    }
+
+    // Check for yield recovery
+    if (monitoring.active && content.includes("✅") && content.includes("Recovered")) {
+      const yieldMatch = content.match(/(\d+\.?\d*)%/);
+      if (yieldMatch) {
+        const currentYield = parseFloat(yieldMatch[1]);
+        setMonitoring((prev) => ({
+          ...prev,
+          currentYield,
+          yieldHistory: [
+            ...prev.yieldHistory,
+            { timestamp: Date.now(), yield: currentYield },
+          ].slice(-20),
+          lastAlert: {
+            type: "yield_recovered",
+            message: content,
+            severity: "info",
+            timestamp: new Date().toISOString(),
+          },
+        }));
+      }
+    }
+
+    // Check for monitoring updates
+    if (monitoring.active && content.includes("📊") && content.includes("Monitoring Update")) {
+      const yieldMatch = content.match(/APY:\s*\*?\*?(\d+\.?\d*)%/);
+      if (yieldMatch) {
+        const currentYield = parseFloat(yieldMatch[1]);
+        setMonitoring((prev) => ({
+          ...prev,
+          currentYield,
+          yieldHistory: [
+            ...prev.yieldHistory,
+            { timestamp: Date.now(), yield: currentYield },
+          ].slice(-20),
+          lastAlert: {
+            type: "monitoring_update",
+            message: content,
+            severity: "info",
+            timestamp: new Date().toISOString(),
+          },
+        }));
+      }
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -51,6 +230,9 @@ export default function ChatInterface({
         if (chunk.type === "content" && chunk.content) {
           fullResponse += chunk.content;
           setStreamingContent(fullResponse);
+
+          // Detect monitoring events
+          detectMonitoringEvent(fullResponse);
 
           // Check if this looks like a vault deployment JSON or strategy recommendation
           if (
@@ -160,17 +342,63 @@ export default function ChatInterface({
       {/* Header */}
       <div className="flex-shrink-0 border-b border-purple-500/20 bg-gray-900/50 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-amber-500 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-white" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-amber-500 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-white">
+                  StoryVault Steward
+                </h1>
+                <p className="text-sm text-purple-300">Your DeFi Life Curator</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">
-                StoryVault Steward
-              </h1>
-              <p className="text-sm text-purple-300">Your DeFi Life Curator</p>
-            </div>
+            
+            {/* Live Monitoring Badge */}
+            {monitoring.active && (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/20 border border-green-500/50">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-sm font-medium text-green-400">
+                  Live Monitoring {monitoring.asset}
+                </span>
+                <Activity className="w-4 h-4 text-green-400" />
+              </div>
+            )}
           </div>
+
+          {/* Monitoring Alert Banner */}
+          {monitoring.active && monitoring.lastAlert && (
+            <div
+              className={cn(
+                "mt-4 px-4 py-3 rounded-lg border",
+                monitoring.lastAlert.severity === "critical"
+                  ? "bg-red-500/10 border-red-500/50 text-red-300"
+                  : monitoring.lastAlert.severity === "warning"
+                  ? "bg-yellow-500/10 border-yellow-500/50 text-yellow-300"
+                  : "bg-blue-500/10 border-blue-500/50 text-blue-300"
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <div className="text-sm font-medium mb-1">
+                    {monitoring.lastAlert.type === "yield_alert"
+                      ? "⚠️ Yield Alert"
+                      : monitoring.lastAlert.type === "yield_recovered"
+                      ? "✅ Yield Recovered"
+                      : "📊 Monitoring Update"}
+                  </div>
+                  <div className="text-sm opacity-90">
+                    Current APY: {monitoring.currentYield.toFixed(2)}% | Target:{" "}
+                    {monitoring.targetYield.toFixed(2)}%
+                  </div>
+                </div>
+                <div className="text-xs opacity-70">
+                  {new Date(monitoring.lastAlert.timestamp).toLocaleTimeString()}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

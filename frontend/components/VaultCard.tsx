@@ -35,11 +35,13 @@ interface VaultDeployment {
 interface VaultCardProps {
   vaultData: VaultDeployment | null;
   isLoading?: boolean;
+  onHireSteward?: () => void;
 }
 
 export default function VaultCard({
   vaultData,
   isLoading = false,
+  onHireSteward,
 }: VaultCardProps) {
   // Loading state
   if (isLoading) {
@@ -172,6 +174,28 @@ export default function VaultCard({
             <ExternalLink className="w-4 h-4" />
           </a>
 
+          {/* Hire Steward Button */}
+          {onHireSteward && (
+            <button
+              onClick={onHireSteward}
+              className={cn(
+                "w-full px-6 py-4 rounded-xl",
+                "bg-gradient-to-r from-green-600 to-emerald-600",
+                "hover:from-green-500 hover:to-emerald-500",
+                "transition-all transform hover:scale-[1.02]",
+                "text-white font-medium text-center",
+                "flex items-center justify-center gap-3",
+                "shadow-lg shadow-green-500/20"
+              )}
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              <span>Hire Steward (Stake IQ)</span>
+              <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                Start Monitoring
+              </span>
+            </button>
+          )}
+
           {/* View Strategy Link */}
           <a
             href={atp_strategy_url}
@@ -194,9 +218,9 @@ export default function VaultCard({
         {/* Info Box */}
         <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
           <p className="text-sm text-purple-200 leading-relaxed">
-            <strong>Next Steps:</strong> Click "Deploy to ATP Platform" to
-            create your autonomous agent on Fraxtal. You'll need 1,500 IQ
-            tokens + $10 worth of frxETH to deploy.
+            <strong>Next Steps:</strong> Deploy your agent on ATP Platform
+            (requires 1,500 IQ + $10 frxETH), then click "Hire Steward" to
+            activate 24/7 autonomous monitoring of your vault yields.
           </p>
         </div>
 
