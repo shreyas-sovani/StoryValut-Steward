@@ -22,5 +22,5 @@ project_context/
 # Scripts
 start-dev.sh
 
-# Frontend (deployed separately)
-frontend/
+# Note: .vercelignore is in repo root but Vercel Root Directory is set to "frontend/"
+# So this file doesn't apply to frontend builds
