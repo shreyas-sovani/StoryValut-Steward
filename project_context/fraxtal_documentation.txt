@@ -1,0 +1,1001 @@
+About Fraxtal
+Fraxtal is a modular rollup blockchain (L2) with a "fractal scaling" roadmap. Fraxtal has a number of familiar and novel features:
+Fraxtal is an EVM equivalent rollup utilizing the OP stack as its smart contract platform and execution environment. Deploying applications is as fast, secure, and cheap as leading Ethereum rollups like Optimism & Base.
+Fraxtal is a modular rollup. It will have multiple components and middleware for other chains and networks to use, connect to, deploy L3s, and build on top of. Currently, Fraxtal uses a separate data availability module developed by the Frax Core Team.
+Fraxtal has blockspace incentives (called Flox) that reward users and developers for spending gas and interacting with any smart contract on the network. Every epoch, users who spend gas and developers that deploy contracts where gas is spent earn FXTL points that can later be converted into tokens. For the first time, users are able to earn more rewards than gas they spend and developers can earn more than the gas their dapps use.
+The native gas token is FRAX issued by Frax Finance.
+FRAX on Fraxtal
+Fraxtal leverages FRAX as the designated gas token, providing users with the capability to utilize FRAX to pay for blockspace.
+Users can acquire FRAX on Fraxtal via the native L2 bridge by depositing FXS (ERC20) from Ethereum mainnet.
+Users can wrap their native FRAX on Fraxtal to receive WFRAX (an ERC20 representation). WFRAX is compatible with Frax Mesh, allowing seamless transfers of WFRAX to other integrated chains in the Frax ecosystem.
+FRAX Dashboard: https://frax.com/own-frax
+
+
+Fraxtal system contract addresses
+Mainnet
+Ethereum Mainnet
+Name
+Value
+AddressManager
+0x8c5D64d10394cFa070066e70Ec19E67398b4dABE
+L1CrossDomainMessengerProxy
+0x126bcc31Bc076B3d515f60FBC81FddE0B0d542Ed
+L1ERC721BridgeProxy
+0xa9B5Fb84B7aeAF0D51C95DB04a76B1D4738D0eC5
+L1StandardBridgeProxy
+0x34C0bD5877A5Ee7099D0f5688D65F4bB9158BDE2
+L2OutputOracleProxy
+0x66CC916Ed5C6C2FA97014f7D1cD141528Ae171e4
+OptimismMintableERC20FactoryProxy
+0x11FE3be54aC01C13Dd985cE2BdD10eD77e1376cc
+OptimismPortalProxy
+0x36cb65c1967A0Fb0EEE11569C51C2f2aA1Ca6f6D
+ProxyAdmin
+0x13Fe62cB24aEa5afd179F20D362c056c3881ABcA
+SystemConfigProxy
+0x34a9f273cbD847d49c3De015FC26c3E66825f8b2
+
+Fraxtal Mainnet
+Name
+Value
+L2StandardBridgeProxy
+0x4200000000000000000000000000000000000010
+L2ToL1MessagePasser
+0x4200000000000000000000000000000000000016
+CrossDomainMessager
+0x4200000000000000000000000000000000000007
+
+Testnet
+Holesky
+Name
+Value
+AddressManager
+0x6C52d1f7aAdD1F27aaa6A9e228CE0312E3CB09A6
+L1CrossDomainMessengerProxy
+0x45A98115D5722C6cfC48D711e0053758E7C0b8ad
+L1ERC721BridgeProxy
+0x0301A6b26a37566d3DCebC7fC4c2143B426bBf53
+L1StandardBridgeProxy
+0x0BaafC217162f64930909aD9f2B27125121d6332
+L2OutputOracleProxy
+0x715EA64DA13F4d0831ece4Ad3E8c1aa013167F32
+OptimismMintableERC20FactoryProxy
+0x740fAfe2383F736d0Bd1a042E50fE15dDa2726C6
+OptimismPortalProxy
+0xB9c64BfA498d5b9a8398Ed6f46eb76d90dE5505d
+ProxyAdmin
+0xA0c6294D524f56fF9BdAeE94b69064c529cB9a1e
+SystemConfigProxy
+0x570Bf63A187776A19a44E6D1e055E3da65C1E3Db
+
+Fraxtal Testnet
+Name
+Value
+L2StandardBridgeProxy
+0x4200000000000000000000000000000000000010
+L2ToL1MessagePasser
+0x4200000000000000000000000000000000000016
+CrossDomainMessager
+0x4200000000000000000000000000000000000007
+
+
+
+Frax tokens
+Mainnet
+Name
+Ethereum Mainnet address
+Fraxtal Mainnet address
+frxETH
+0x5E8422345238F34275888049021821E8E08CAa1f
+0xfc00000000000000000000000000000000000006
+sfrxETH
+0xac3E018457B222d93114458476f3E3416Abbe38F
+0xfc00000000000000000000000000000000000005
+FRAX
+0x3432B6A60D23Ca0dFCa7761B7ab56459D9C964D0
+Native Token
+WFRAX
+0x04ACaF8D2865c0714F79da09645C13FD2888977f
+0xfc00000000000000000000000000000000000002
+frxUSD
+0x853d955aCEf822Db058eb8505911ED77F175b99e
+0xfc00000000000000000000000000000000000001
+sfrxUSD
+0xcf62F905562626CfcDD2261162a51fd02Fc9c5b6
+0xfc00000000000000000000000000000000000008
+LFRAX
+0x853d955aCEf822Db058eb8505911ED77F175b99e
+0xff000000000000000000000000000000000001Fd
+sFRAX
+0xA663B02CF0a4b149d2aD41910CB81e23e1c41c32
+N/A
+frxBTC
+0x6CA2338a21B2fE9dD39040d2fE06AAD861f77F95
+0xfc00000000000000000000000000000000000007
+FPI
+0x5Ca135cB8527d76e932f34B5145575F9d8cbE08E
+0xfc00000000000000000000000000000000000003
+FPIS
+0xc2544A32872A91F4A553b404C6950e89De901fdb
+0xfc00000000000000000000000000000000000004
+
+Testnet
+Name
+Holesky Testnet address
+Fraxtal Testnet address
+frxETH
+0x17845EA6a9BfD2caF1b9E558948BB4999dF2656e
+0xfc00000000000000000000000000000000000006
+sfrxETH
+0xa63f56985F9C7F3bc9fFc5685535649e0C1a55f3
+0xfc00000000000000000000000000000000000005
+FRAX
+0x4e7300F74F59AFaEcCdc0d434758Df9be238F0BF
+Native token
+WFRAX
+N/A
+0xfc00000000000000000000000000000000000002
+LFRAX
+0x0304A365C0fbb4b1Ad423887861b9b69a5f0c00E
+0xfc00000000000000000000000000000000000001
+sFRAX
+TBD
+TBD
+frxBTC
+TBD
+TBD
+FPI
+0xfBCB0F967817c924f83e26e04F0FB28ED4d6276F
+0xfc00000000000000000000000000000000000003
+FPIS
+0x0363a32D18c25a3FD19a0d00B02106C03d8b8182
+0xfc00000000000000000000000000000000000004
+
+
+
+Superchain Token List
+Various ERC-20 tokens originally deployed to Ethereum also have corresponding "bridged" representations on Fraxtal. The Superchain Token List exists to help users discover the correct bridged token addresses for each token.
+
+Network information
+Click on the RPC endpoint URL below for a UI that has a single-click button to add to your wallet.
+Fraxtal Mainnet
+Name
+Value
+Network Name
+Fraxtal Mainnet L2
+RPC Endpoint
+https://rpc.frax.com
+Chain ID
+252 (0xfc)
+Currency Symbol
+FRAX
+Block Explorer
+https://fraxscan.com
+
+Fraxtal Testnet (Holesky)
+Name
+Value
+Network Name
+Fraxtal Testnet L2
+RPC Endpoint
+https://rpc.testnet.frax.com
+Chain ID
+2522 (0x9DA)
+Currency Symbol
+FRAX
+Block Explorer
+https://holesky.fraxscan.com
+
+Info: L1 & L2 protocol and network-related smart contract deployments can be found on the Fraxtal Contracts page.
+Other RPC Providers
+dRPC NodeCloud
+Get access to Fraxtal RPC with their free and paid plans. Features decentralized nodes across 9 geo-clusters, AI-powered load balancer, and PAYG.
+Tenderly
+Tenderly provides both HTTP and WebSocket access to Fraxtal and offers additional custom RPC methods to help debug/simulate requests.
+The public, rate-limited RPC URL is (https|wss)://fraxtal.gateway.tenderly.co but you can also set up a dedicated node for additional throughput.
+Grove
+Grove provides RPC access backed by thousands of independent, globally distributed nodes from the POKT Network.
+Nirvana
+Nirvana provides private, dedicated Fraxtal nodes on their optimized bare metal cloud.
+Opsec
+Opsec Hosting Fraxtal nodes on the OpSec network empowers users to actively contribute to the decentralization and strengthening of the Fraxtal mainnet.
+QuickNode
+QuickNode provides hosted Fraxtal RPC nodes under their free and paid plans, granting flexible and reliable access to the network.
+
+Hardware requirements
+We recommend running a node with no less than the following resources:
+16 GB RAM
+500GB of NVMe storage
+
+Running a Node
+Clone the repo.
+Copy the relevant file (.env.testnet.SAMPLE, .env.mainnet.SAMPLE) into a new file without the .SAMPLE suffix: (.env.testnet, .env.mainnet).
+Edit the resulting file as needed, such as using your own L1 RPC endpoint.
+Run docker compose -f testnet.docker-compose.yml up. Confirm you get a response:
+curl -d '{"id":0,"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["latest",false]}' \  -H "Content-Type: application/json" http://127.0.0.1:8545
+
+
+Fraxtal DA implementation consists of a modified op-batcher and op-node executable that uses our custom DA implementation as the storage backend of the chain data.
+Our custom implementation along with the other node changes can be found in this repo.
+The major changes are in the op-batcher which is the component that’s responsible for storing the chain data and posting the reference on the L1 to be picked up by op-node.
+
+Compared to the default OP implementation where data is stored in EIP-4844 blobs, ours sends the data to a da-server which is responsible of uploading the data on multiple backends and returning its IFPS hash. The IPFS hash is then posted on the L1 so it can be picked up later by op-node.
+We are currently hosting the data blobs on 4 different storage backends with a total of 12 copies.
+The reference posted on the L1 is then read by our custom op-node implementation that fetches the actual data from a DA endpoint (we provide a public one but anyone can build one that relies only on IPFS).
+
+Future plans
+For the future we’re planning to expand our supported DA backends/implementation. Some of the options we’re reviewing are:
+EigenDA
+Celestia
+Near DA
+EIP-4844 Blobs
+OP plasma integration
+
+
+Block explorers
+Etherscan
+An Etherscan explorer is available at fraxscan.com.
+A testnet Etherscan explorer at holesky.fraxscan.com.
+Blockscout
+A Blockscout explorer is available for Fraxtal.
+Blockscout provides tools to help debug smart contracts and transactions, and view, verify, and interact with smart contract source code.
+A testnet explorer for Fraxtal Testnet is also available.
+Superscan by Routescan
+A Routescan explorer is available both on the Superscan (Mainnet | Testnet) and as a single-chain explorer (Mainnet | Testnet).
+The Superscan is the unified ecosystem explorer for the Superchain.
+Tenderly Developer explorer
+The Developer Explorer is a development toolbox designed to help developers effectively manage, debug, and monitor their Fraxtal projects.
+Use the Developer Explorer to debug and simulate contracts with the integrated Debugger, gaining insights to quickly identify and resolve issues.
+Monitor deployed contracts and protocols on Fraxtal in real-time to ensure optimal performance and stability.
+Set up critical alerts on contracts to proactively respond to issues and improve security practices. Use Alerts API to set up custom alerts and configure granular triggering rules.
+Leverage Developer Explorer with Virtual TestNets during the entire dapp development process, from testing to staging and go-live. Utilize it for bug bounty programs for identifying vulnerabilities, enhancing the overall security of your dapp.
+
+
+Bridges
+Fraxtal OP Stack Bridge
+The Fraxtal Bridge allows you to bridge FRAX, and any other tokens from Ethereum to Fraxtal and vice versa.
+Frax Mesh
+For in-depth technical architecture and protocol design, see the official Frax Crosschain Overview
+Frax Mesh is the native, unified bridging infrastructure for all Frax ecosystem assets—including FRAX, frxUSD, sfrxUSD, frxETH, and sfrxETH—across multiple EVM-compatible chains such as Ethereum Mainnet, Fraxtal.
+Users can initiate bridging directly within the Frax UI at https://frax.com/swap
+Comparison
+Ethereum -> Fraxtal
+
+
+Fraxtal OP Stack Bridge
+Frax Mesh
+Supported tokens
+All
+Frax tokens
+Duration
+< 1 hour
+< 1 Minute
+Delivery
+Automatically distributed
+Automatically distributed
+
+Fraxtal -> Ethereum
+
+
+Fraxtal OP Stack Bridge
+Frax Mesh
+Supported tokens
+All
+Frax tokens
+Duration
+7 days
+< 1 Minute
+Delivery
+Must claim
+Automatically distributed
+
+
+
+Oracles
+API3
+The API3 Market provides access to 200+ price feeds on Fraxtal Mainnet and Testnet. The price feeds operate as a native push oracle and can be activated instantly via the Market UI.
+The price feeds are delivered by an aggregate of first-party oracles using signed data and support OEV recapture.
+Unlike traditional data feeds, reading API3 price feeds enables dApps to auction off the right to update the price feeds to searcher bots which facilitates more efficient liquidation processes for users and LPs of DeFi money markets. The OEV recaptured is returned to the dApp.
+Check out these guides on how to:
+Use dAPIs on the Market
+Read a dAPI
+Additional Resources
+API3 Docs
+dAPI Docs
+Github
+Medium
+RedStone
+IMPORTANT: Please reach out to the RedStone team on Discord before using RedStone oracles in production dApps. We will be happy to help you with the integration and will set up a new pool of data provider nodes if there is a need.
+What is RedStone
+RedStone is a Modular Oracle specialising in yield-bearing collateral for lending markets, especially LSTs & LRTs. It offers gas-optimized data feeds across 50+ chains & all rollups. Trusted by Morpho, Venus, ether.fi & more.
+How RedStone Classic Works​
+Redstone offers push-based price feeds for Fraxtal. Learn how to use Redstone feeds with this guide.
+Feeds on Fraxtal
+To check out the most recent list of the feeds provided on Fraxtal by RedStone Oracles, go to the documentation.
+🌎 Useful links
+RedStone Documentation
+RedStone Price Feeds
+🙋‍♂️ Need help?
+Please feel free to contact the RedStone team on Discord if you have any questions.
+
+Faucets
+Testnet
+Holesky
+The Frax POW Faucet provides testnet FRAX for Fraxtal Testnet.
+
+Indexers
+Goldsky
+Goldsky is a high-performance data indexing provider for Fraxtal that makes it easy to extract, transform, and load on-chain data to power both application and analytics use cases.
+Quick Start
+
+
+
+
+
+
+The Graph
+The Graph provides an easy way to query smart contract data through APIs known as subgraphs. The Graph’s infrastructure relies on a decentralized network of indexers, enabling your dapp to become truly decentralized.
+Quick Start
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+rax Ecosystem Overview
+Full version of legacy Frax Protocol docs are currently available on docs.frax.finance
+Frax currently issues 3 stablecoins: frxUSD, FPI, and frxETH, along with numerous other non-stablecoin tokens. There are also multiple contract groups or "subprotocols" within it that integrate these tokens to provide utility and stability. Core concepts to understand the unified Frax Finance ecosystem include:
+Stablecoins
+frxUSD – a USD pegged asset.
+FPI – The Frax Price Index (FPI) stablecoin, the first stablecoin pegged to a basket of consumer goods creating its own unit of account separate from any nation state denominated money.
+frxETH – a Liquid Staking Derivative (LSD) token pegged to ETH, and intended for use as a replacement for WETH in smart contracts. sfrxETH is the complementary ERC4626 token that accrues value from ETH staking rewards, MEV, etc. frxETH V2 allows anonymous validator pools that can use escrowed exit messages as collateral to borrow additional ETH.
+Subprotocols
+Fraxswap – Native AMM (based on Uniswap V2) with added time weighted average market maker (TWAMM) orders used by the Frax Protocol for rebalancing collateral, mints/redemptions, expanding/contracting stablecoin supply, and deploying protocol owned liquidity onchain.
+Borrow AMM (BAMM) – Borrowing/lending module built on top of Fraxswap. Does not need an outside oracle or external liquidity to function safely. Borrowers rent liquidity provided by lenders to automatically leverage up and down, such that they can stay solvent even in the case of high volatility.
+Fraxlend – Permissionless lending market that is the lending facility for Frax-based stablecoins. Allows debt origination, customized non-custodial loans, and onboarding collateral assets to the Frax Finance economy.
+AMOs / Protocol-owned Liquidity (POL) – The protocol operates numerous Algorithmic Market Operation (AMO) smart contracts to manage its collateral and use it to generate revenue. Examples include the Fraxlend AMO, Curve AMO, and Uniswap V3 AMO.
+Fraxtal – A modular L2 chain, based on Optimism technology, that uses FRAX as the gas token.
+Fraxtal Points FXTL – Users earn FXTL for useful activities on Fraxtal, such as spending gas, creating heavily-used contracts, and farming in specific pools.
+Frax Bonds (FXB) – Zero coupon bond-like tokens auctioned at below 1 LFRAX, but exchangeable for 1 LFRAX upon maturity. Used to help lock LFRAX liquidity and stabilize the LFRAX peg.
+Staked Frax USD (sfrxUSD) – ERC4626 staking vault that distributes part of the Frax Protocol yield weekly to stakers. Denominated in frxUSD stablecoins.
+Frax (prev. FXS) – The base-layer scarce commodity asset for the entire Frax ecosystem of smart contracts. It accrues fees, revenue, and excess collateral value. and it is being used as Fraxtal gas token.
+veFRAX – Users lock Frax (prev. FXS) for a variable amount of time and receive voting power and farming weight boosts. Inspired by Curve's veCRV.
+Links
+Frax Website: https://frax.com
+Pro Website: https://app.frax.finance
+Telegram: https://t.me/fraxfinance
+Telegram (announcements / news): https://t.me/fraxfinancenews
+Discord: https://discord.com/invite/fraxfinance
+Twitter: https://twitter.com/fraxfinance
+Medium / Blog: https://fraxfinancecommunity.medium.com/
+Governance (discussion): https://gov.frax.finance/
+Governance (voting): https://snapshot.org/#/frax.eth
+Github: https://github.com/FraxFinance
+
+
+The Frax USD Stablecoin
+Overview
+Frax USD (frxUSD) is a fiat-redeemable, fully collateralized stablecoin issued by the Frax Protocol. Each frxUSD is backed 1-to-1 by permitted cash-equivalent reserves such as tokenized U.S. Treasury funds (e.g., BUIDL, USTB, JTRSY, WTGXX, AUSD), held with regulated custodians and managed by Frax Inc under delegation from the Frax DAO.
+
+Governance & Structure
+The Frax DAO retains ownership and ultimate control of the protocol and may amend or revoke delegated authority at any time. Per FIP-432, the DAO has delegated issuer-level compliance and collateral management for frxUSD to Frax Inc, a public-benefit corporation.
+Frax Inc is responsible for:
+Managing custodians and reserve composition
+Coordinating audits and attestations
+Overseeing KYC/KYB compliance
+Maintaining fiat redemption operations and disclosures
+Frax Inc may retain only the funds required for these operations. Any surplus revenue from issuer activities is returned to the Frax DAO treasury.
+Enshrined Custodians
+An enshrined custodian is a real-world entity that can mint and burn frxUSD 1-to-1 in exchange for $1.00 of cash-equivalent reserves that they custody. This means that an enshrined custodian can mint 1 frxUSD for $1.00 of provable reserves they hold and release $1.00 of reserve they custody when they burn 1 frxUSD.
+Real-world entities can be added as an enshrined custodian through Frax Inc under delegation from the Frax DAO, along with a custodian cap which signifies the maximum amount of frxUSD they can mint for holding reserves. A frxUSDCustodian contract is deployed through this delegated process, signifying the allotted minting cap and a token representing the asset they custody (ie: Blackrock BUIDL).
+Any user is able to interact with any frxUSDCustodian contract; however, the underlying reserve token itself might have further requirements such as whitelists. This allows the frxUSD stablecoin to function in a permissionless manner while allowing real-world entities & institutions to onboard frxUSD while complying with their own internal requirements. frxUSD is redeemable for any custodian asset on demand, meaning that there is no guarantee that frxUSD is redeemable for a particular asset or from a particular enshrined custodian.
+For example, if Blackrock BUIDL and Superstate USTB are enshrined custodian assets, there is no guarantee that frxUSD is always redeemable for both BUIDL and USTB if all supply of BUIDL is redeemed against from the Blackrock frxUSDCustodian contract (or vice versa). As long as frxUSDCustodian contracts have collateral tokens within them, frxUSD is redeemable on demand from them.
+The Staked Frax USD Yielding Stablecoin
+Overview
+Staked Frax USD (sfrxUSD) is the yielding stablecoin implemented as an ERC4626-like token. sfrxUSD is fully redeemable for frxUSD at an increasing rate proportional to the yield mechanism (described below). sfrxUSD is not rebasing and can be redeemed for the underlying frxUSD with no price impact, via the FraxtalERC4626MintRedeemer.
+sfrxUSD is unique in yielding design in that it targets a benchmark-rate strategy that alternates between the best of three governance-approved strategies: carry-trade, algorithmic market operations (AMOs), and the Interest on Reserve Balances/T-Bill (IORB) rate. This insures that sfrxUSD’s APY is the most competitive yield onchain.
+
+Benchmark Yield Strategy (BYS):
+The BYS is the system which allocates all frxUSD staked in the sfrxUSD yield vault to the top yield venue in the current market condition.
+If carry-trade yield is higher than DeFi yields, then all frxUSD staked in the yield vault will be allocated to carry-trade strategies. If the carry-trade yield is lesser than DeFi AMO strategies, the frxUSD staked in the yield vault will be allocated to DeFi venues through AMOs. If the highest yield is the IORB/T-Bill rate, then frxUSD staked in the yield vault will be allocated to RWA strategies holding short-dated (>90 days) United States Treasury Bills. Thus as the amount of frxUSD staked in the yield vault increases, the yield strategy will adjust to the best source of yield in current market conditions allowing sfrxUSD holders to earn the highest risk-adjusted yield onchain in nearly all market conditions without having to hold any other yielding USD stablecoin.
+
+sfrxUSD BYS consistently achieves the highest risk-adjusted yields in DeFi for sfrxUSD holders.
+BYS Strategies
+BYS Carry-Trade venues:
+Ethena
+Superstate
+
+BYS DeFi venues:
+Aave
+Curve Finance
+Convex Finance
+Euler Finance
+Fraxlend
+dTrinity lending
+
+BYS IORB/T-Bill venues:
+Blackrock
+FinresPBC
+
+Users are encouraged to submit additional Blue chip Defi yield strategies for discussion on our governance forum.
+Related Frax DAO Governance Proposals:
+[FIP - 439] sfrxUSD new strategies
+[FIP - 437] Add Predeposit Vault AMO to sfrxUSD strategies on Ethereum & Fraxtal
+[FIP - 435] Allow the use of Stake DAO OnlyBoost for sfrxUSD Curve AMOs
+[FIP - 434] sfrxUSD AMO Deployments & Future Strategies
+
+Frax Bonds
+Zero-coupon bonds that help stabilize Frax stabalecoins
+Overview
+FXB tokens are simple, trustless tokens that resemble a zero-coupon bond that converts to the Legacy Frax Dollar stablecoin (FIP-430) upon maturity. FXB AMOs auction off FXBs at a discount to face value. This discount provides the equivalent of RWA yield to buyers without the assumption of RWA risk. They also help remove circulating Legacy Frax Dollar and stabilize the peg, as users cannot sell Legacy Frax Dollar that is locked (until maturity) in a FXB.
+
+Details
+FXBs are debt tokens denominated in Legacy Frax Dollar, not a claim on any other asset or collateral. FXB tokens are only convertible to Legacy Frax Dollar, they do not guarantee Legacy Frax Dollar peg, Legacy Frax Dollar value, or yield/interest denominated in any other asset except Legacy Frax Dollar. FXBs do not entitle the holder to any asset offchain or onchain (other than Legacy Frax Dollar). Thus, FXBs are not redeemable for US Treasury Bills nor any real-world asset, are not directly backed/collateralized by them (or any specific asset), and do not have any utility except trustlessly converting to Legacy Frax Dollar at the pre-programmed maturity timestamp generated at their minting. This is important and not merely a semantic distinction because it directly defines the normative and economic property of FXBs. Frax Bond tokens only guarantee that they convert to Legacy Frax Dollar on a one-to-one basis through smart contracts that issue them.
+FXBs allow the formation of a yield curve to price the time value of lending Legacy Frax Dollar back to the protocol itself. Each FXB token is a fungible ERC20 token deployed from an onchain factory contract. At FXB minting time, Legacy Frax Dollar are transferred into the FXB contract for conversion on maturity. This prevents any external actions being necessary for the full FXB cycle to occur and entirely remains trustless. There can be multiple FXB series circulating at all times and no limit for the minimum or maximum maturity timestamp for FXBs deployed from the factory.
+FXBs mature at the end of the day of their maturity date in UTC and have no expiration. For example, the 20261231 FXB is able to be burned back for its' corresponding Legacy Frax Dollar as soon as 1893456000.
+
+FXB system economical flow
+Series Auctions
+FXB series price discovery happens through a continuous gradual Dutch auction (GDA) auction system that has quantity and price limit set by the Frax team. This guarantees that FXB tokens are not sold for prices lower than the floor limit. Auctions happen through the FXB AMO contract and are trustless, permissionless, and non-custodial. New auctions can happen at any time by the Fraxtal Comptroller and Fraxtal AMO Operator, initiated through the FXB AMO.
+
+Complete transaction flow of FXB system
+Minting & Redemptions: Origin chain vs. Bridged chain
+As mentioned, at FXB minting time, Legacy Frax Dollar are transferred into the FXB contract for conversion on maturity. An FXB can be broken down into two types, Origin and Bridged, referring to the chain the FXB is originally minted on. This differentiation is needed as the Origin chain, the chain the FXB was originally minted from, is where the FXB owner is able to burn their FXB for the equivalent Legacy Frax Dollar after maturity. An FXB which, for example, originates on Fraxtal and is then bridged to Fraxtal, is considered Bridged, whereby the underlying Legacy Frax Dollar remains on Fraxtal and the FXB must be bridged back to redeem the Legacy Frax Dollar. Similarly, the FXB must be minted on the origin chain to contain the underlying Legacy Frax Dollar.
+Why does this happen? When an FXB is originally created, it is done through the FXBFactory. This origin FXB contains the code to mint and burn. Once the FXB is bridged, the destination chain creates the FXB from the bridge ERC20Factory. This bridged version can only be minted and burned (redeemed) by the bridge.
+Contracts
+To trustfully import contracts to your local repository, refer to the frax-template.
+Operations Contracts
+Contract
+Ethereum
+Fraxtal
+FXB Factory
+0xa8478781D9605E17c3b4c9C79e7127c4597116E4
+0xaFa1705021f65418e746D8664f4B8A58271f6De4
+Auction Factory
+0xc9268c7F59850B26567b0f5d3Dcc317cEDC43490
+0x2606C2BbE377EDa9e38FFf300D422Ca7cCAB1e5d
+FXB AMO
+0x452420df4AC1e3db5429b5FD629f3047482C543C
+0xE6ed07952dC9993DD52c6d991Fa809C00eBE58a3
+AMO Operator (msig)
+0x831822660572bd54ebaa065C2acef662a6277D40
+0x5f25218ed9474b721d6a38c115107428E832fA2E
+AMO Timelock (msig)
+0x831822660572bd54ebaa065C2acef662a6277D40
+0xC4EB45d80DC1F079045E75D5d55de8eD1c1090E6
+
+FXB Contracts
+FXB 2024
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+FXB 2025
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+FXB 2026
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+FXB 2027
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+FXB 2029
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+FXB 2055
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Addresses
+Assets
+frxUSD
+Chain
+type
+Address
+Ethereum
+Native
+0xCAcd6fd266aF91b8AeD52aCCc382b4e165586E29
+Fraxtal
+Native
+0xfc00000000000000000000000000000000000001
+
+sfrxUSD
+Chain
+type
+Address
+Ethereum
+Native
+0xcf62F905562626CfcDD2261162a51fd02Fc9c5b6
+Fraxtal
+Native
+0xfc00000000000000000000000000000000000008
+
+FXB 2024
+Origin Chain: Ethereum
+Maturity Date: December 31, 2024
+Contract
+Ethereum
+Fraxtal
+Token
+0xF8FDe8A259A3698902C88bdB1E13Ff28Cd7f6F09
+0xa71bB8c79dc8FfA90A6Dd711aA9Fbe5114c19cba
+Auction
+N/A
+0x36b3b471c7486Eb9583759681404c48d3c8CC813
+Oracle
+0x08a0748cF885F46e20fA30A50a035808eab293D3
+N/A
+
+FXB 2025
+Origin Chain: Fraxtal
+Maturity Date: December 31, 2025
+Contract
+Ethereum
+Fraxtal
+Token
+N/A
+0xacA9A33698cF96413A40A4eB9E87906ff40fC6CA
+Auction
+N/A
+0x6e6B61369A4f549FF3A7c9E0CFA5F7E8Ada5CD22
+Oracle
+N/A
+N/A
+
+FXB 2026
+Origin Chain: Ethereum
+Maturity Date: December 31, 2026
+Contract
+Ethereum
+Fraxtal
+Token
+0x76237BCfDbe8e06FB774663add96216961df4ff3
+0x8e9C334afc76106F08E0383907F4Fca9bB10BA3e
+Auction
+N/A
+0x334f19B2B6ab1B16eC65A7138dCEe22B60E1A60c
+Oracle
+0x2ec5D1C13fEF1C7029eE329a1D31B2180c9b3707
+N/A
+
+FXB 2027
+Origin Chain: Fraxtal
+Maturity Date: December 31, 2027
+Contract
+Ethereum
+Fraxtal
+Token
+N/A
+N/A
+Auction
+N/A
+N/A
+Oracle
+N/A
+N/A
+
+FXB 2029
+Origin Chain: Fraxtal
+Maturity Date: December 31, 2029
+Contract
+Ethereum
+Fraxtal
+Token
+N/A
+0xF1e2b576aF4C6a7eE966b14C810b772391e92153
+Auction
+N/A
+0xb29002BF776066BF8d73B3F0597cA8B894E30050
+Oracle
+N/A
+N/A
+
+FXB 2055
+Origin Chain: Fraxtal
+Maturity Date: December 31, 2055
+Contract
+Ethereum
+Fraxtal
+Token
+N/A
+0xc38173D34afaEA88Bc482813B3CD267bc8A1EA83
+Auction
+N/A
+0xfC9f079e9D7Fa6080f61F8541870580Ee7af7CF2
+Oracle
+N/A
+N/A
+
+Operations Contracts
+Contract
+Ethereum
+Fraxtal
+Frax USD Comptroller
+N/A
+N/A
+
+
+Contract
+Ethereum
+Fraxtal
+FXB Factory
+0xa8478781D9605E17c3b4c9C79e7127c4597116E4
+0xaFa1705021f65418e746D8664f4B8A58271f6De4
+Auction Factory
+0xc9268c7F59850B26567b0f5d3Dcc317cEDC43490
+0x2606C2BbE377EDa9e38FFf300D422Ca7cCAB1e5d
+FXB AMO
+0x452420df4AC1e3db5429b5FD629f3047482C543C
+0xE6ed07952dC9993DD52c6d991Fa809C00eBE58a3
+AMO Operator (msig)
+0x831822660572bd54ebaa065C2acef662a6277D40
+0x5f25218ed9474b721d6a38c115107428E832fA2E
+AMO Timelock (msig)
+0x831822660572bd54ebaa065C2acef662a6277D40
+0xC4EB45d80DC1F079045E75D5d55de8eD1c1090E6
+
+
+Overview
+Frax's liquid ETH staking derivative
+Summary
+Frax Ether is a liquid ETH staking derivative and stablecoin system designed to uniquely leverage the Frax Finance ecosystem to maximize staking yield and smoothen the Ethereum staking process for a simplified, secure, and DeFi-native way to earn interest on ETH. Lastly, 10% is retained, with 8% as a protocol fee and 2% to an insurance fund. The balance sheet & peg of frxETH to ETH is independent of other Frax Finance balance sheets.
+The Frax Ether system comprises three primary components, Frax Ether (frxETH), Staked Frax Ether (sfrxETH), and the Frax ETH Minter:
+frxETH acts as a stablecoin loosely pegged to ETH, leveraging Frax's winning playbook on stablecoins and onboarding ETH into the Frax ecosystem. The frxETH peg is defined as 1% of the exchange rate on each side 1.01 to .9900.
+sfrxETH is the version of frxETH which accrues staking yield. All profit generated from Frax Ether validators is distributed to sfrxETH holders. By exchanging frxETH for sfrxETH, one becomes eligible for staking yield, which is redeemed upon converting sfrxETH back to frxETH.
+Frax ETH Minter (frxETHMinter) allows the exchange of ETH for frxETH, bringing ETH into the Frax ecosystem, spinning up new validator nodes when able, and minting new frxETH equal to the amount of ETH sent.
+Liquid Staking
+Solo ETH staking requires the technical knowledge and initial setup associated with running a validator node, and also that deposits be made 32 ETH at a time. By opting to use a liquid ETH staking derivative instead of staking ETH in another form, staking yield can be accrued much more simply, abstracting the need to run validators, allowing yield to be earned on any amount of ETH, allowing withdrawals at any time and of any size, and allowing far greater composability throughout DeFi.
+Income Distribution
+Per FIP-122, the ETH staking income is distributed as follows:
+sfrxETH Rewards [90%]: Rewarded to sfrxETH vault stakers in the form of frxETH. This generates sfrxETH APY.
+Protocol fee [8%]: Sent to Frax ecosystem contracts (like AMOs) for the eventual benefit of FXS holders and FRAX peg backing.
+Insurance fund [2%]: Covers potential slashing events/unforeseen penalties. Backs frxETH deposits to effectively keep frxETH overcollateralized at over 100% CR to cover any possible issues/losses.
+Flowchart
+
+
+frxETH and sfrxETH
+ETH in the Frax ecosystem comes in two forms, frxETH (Frax Ether), and sfrxETH (Staked Frax Ether).
+frxETH
+frxETH acts as a stablecoin loosely pegged to ETH, so that 1 frxETH always represents 1 ETH and the amount of frxETH in circulation matches the amount of ETH in the Frax ETH system. When ETH is sent to the frxETHMinter, an equivalent amount of frxETH is minted. Holding frxETH on its own is not eligible for staking yield and should be thought of as analogous as holding ETH. frxETH peg is defined as 1% on each side of 1.00 exchange rate meaning the frxETH peg is defended to keep the exchange rate between 1.01-.9900 ETH per 1 frxETH.
+
+sfrxETH
+sfrxETH is a ERC-4626 vault designed to accrue the staking yield of the Frax ETH validators. At any time, frxETH can be exchanged for sfrxETH by depositing it into the sfrxETH vault, which allows users to earn staking yield on their frxETH. Over time, as validators accrue staking yield, an equivalent amount of frxETH is minted and added to the vault, allowing users to redeem their sfrxETH for a greater amount of frxETH than they deposited.
+The exhange rate of frxETH per sfrxETH increases over time as staking rewards are added to the vault. By holding sfrxETH you hold a % claim on an increasing amount of the vault's frxETH, splitting staking rewards up among sfrxETH holders proportional to their share of the total sfrxETH. This is similar to other autocompounding tokens like Aave's aUSDC and Compound's cUSDC.
+
+
+Technical Specifications
+frxETH
+frxETH shares much of its code with both the Frax and FPI stablecoins, and implements the ERC-2612 standard, allowing spender approvals to be made via ERC-712 signatures passed to the permit() function.
+sfrxETH
+sfrxETH is a ERC-4626 compliant vault. sfrxETH is obtained by first approving the sfrxETH contract as a frxETH spender, and then calling mint() (mints a specific number of sfrxETH) or deposit() (deposits a specific amount of frxETH). The approval step and the minting step can be combined with depositWithSignature() or mintWithSignature(), removing the need for two seperate transactions.
+As validators generate staking yield, an equivalent amount of frxETH is minted and sent to the sfrxETH contract. This means that once rewards are synced, one's sfrxETH may be redeemed for a greater amount of frxETH than it took to mint.
+To prevent malicious users from stealing a validator yield distribution to the vault, reward distributions are smoothed over time cycles. Whenever syncRewards() is called on the sfrxETH contract, any additional frxETH added to the contract over the contract's internal balance is queued to be distributed linearly over the remainder of a cycle window.
+sfrxETH is also ERC-2612 compliant, allowing the use of signature permits.
+For real time information and monitoring of validators, see Frax Facts.
+frxETHMinter
+The frxETHMinter mints frxETH when it receives ETH either through the submit() or receive() function. Whenever a submission pushes the minter balance over 32 ETH, the contract pops a validator's deposit credentials off of a stack and passes the 32 eth deposit along with the credentials to the ETH 2.0 deposit contract, automatically spinning up a new validator.
+As needed, new credentials are added to the stack to ensure that there are always validators ready to take deposits. If at any time the contract runs out of validators, frxETH will continue to be minted as normal (unless paused) but no new validators will be spun up until more are added to the stack.
+The withdrawal credential is shared by all the validators on the stack, meaning all validators share the same withdrawal address. This address is set to the Frax treasury contract at launch, so that withdrawals may be safely handled once live.
+In addition, when adding validators it is necessary to pass the DepositDataRoot as provided when generating the deposit data, this is to provide redundancy in ensuring a validator with misinputted parameters will not be accepted when ETH is deposited.
+The protocol may set a ratio of funds to withold when ETH is submitted. These funds are not counted when gathering 32 ETH deposits to spin up validators and are instead used to market make across DeFi, ensuring liquid markets for frxETH.
+Frax in-House Validators
+Each validator's public address and real time stats can be monitored at: https://facts.frax.finance/frxeth/validators
+Third party & community tracking of all of frxETH's validators can be found at: https://explorer.rated.network/o/Frax?network=mainnet&timeWindow=1d&idType=pool
+Redemption
+Mechanism for converting frxETH to ETH 1-to-1 without fees or slippage
+Summary
+The Frax Ether Protocol allows for frxETH holders to redeem their tokens for ETH using the frxETH Redemption Queue Contract. Since frxETH is collateralized by ETH that are staked in validator nodes, these validators are then ejected to service 1-to-1 redemptions of frxETH for ETH through the redemption contract. Users who opt to redeem their frxETH rather than swap on secondary markets (such as AMMs like Curve) can at any time send their frxETH to the redemption contract for a redemption NFT. This NFT reserves their place in the queue and shows their redemption duration through a timestamp. Once the timestamp is reached, the NFT holder can call a function to swap their NFT for the exact amount of ETH as their redeemed frxETH (without fees or slippage). The redemption process is meant to safeguard against frontrunning, MEV, and other arbtriage externalities by guaranteeing users who have redeemed (ie: who hold the redemption NFT) their fair spot in the queue line.
+frxETH Redemption Queue
+The frxETH redemption queue is a specific waiting time system that redeemers must wait through to receive ETH for their frxETH. The frxETH redemption queue waiting time is calculated as: posEntryQueue+posExitQueue+deltaFactor. This means that the time required to wait to receive ETH is the total time of both entry and exit queue at the time of initiation and an additional amount set by governance so that node operators have a small amount of time to make preparations to eject.
+The queue is the sum duration of the Ethereum proof of stake entry and exit queues due to the fact that users staking sfrxETH do not bear any cost of waiting (unlike ETH stakers who must wait the entry queue). Therefore, if the Frax Ether system has no entry queue on receiving staking income, then the entry queue must be accounted for on exit by redeemers. Redeemers must wait the sum total of both entry and exit queues in order to redeem their frxETH for ETH. Otherwise, the system could be vulnerable to griefing attacks where users enter into sfrxETH during periods of long entry queue times, then specifically redeem for ETH during times when the proof of stake exit queue is long. In order to avoid this attack vector, the frxETH redemption system forces redeemers to wait the summation of both queues and a delta factor.
+FraxEtherRedemptionQueue: 0x82bA8da44Cd5261762e629dd5c605b17715727bd
+frxETH V2
+V2 of Frax Ether (frxETH)
+Summary
+frxETH V2 allows the possibility for anonymous / external validators to enter the frxETH system. All of their ETH staking rewards will flow directly to a ValidatorPool smart contract under their control and thus no frxETH will be minted for them. They will however receive credit which can be used to borrow ETH that entered through the V1 mint mechanism. The collateral for this borrowing is an escrowed exit message, which can be executed by the frxETH protocol if their borrow position becomes unhealthy. The exited funds only go to the ValidatorPool and become "trapped" their until all loans are paid off.
+The amount of credit per 32 ETH deposited will depend on the validator operator pool. Anonymous pools will only receive 24 ETH borrow credit per 32 ETH. Known / community whitelisted pools can receive up to 31 ETH per 32 ETH deposited. Borrowed ETH can be used to spin up additional validators, or alternatively, withdrawn out of the system for other use by the borrower. An offchain bot, the Beacon Oracle, will constantly monitor the health of all validators / validator pools and execute exit message(s) if a liquidation scenario occurs. Additionally, the interest rate will increase if ETH becomes scarce from redemptions, heavy borrowing, or both.
+The frxETH protocol will earn income both from investing idle ETH (Curve AMOs) as well as receiving interest from validator pool borrow activity. Existing V1 Frax-operated validators will also earn yield from ETH staking.
+Example borrow
+
+Example borrow chart for a 320E initial supply by the user. Assuming 24E credit per validator.
+In this example, if you only put in 320E and nothing else, you can "control" 1248E which is 3.9x. Your LTV is (borrowed ETH) / (total ETH in validators). The LTV is denominated in ETH, so the market price of ETH does not matter. Larger initial amounts will converge to 4x. Max leverage (for 24E per 32E credit) is 32E / (32E - 24E) = 32E / 8E = 4x. Doing 12 rounds as in the example above however would put you dangerously close to the LTV limit and you risk some of your validators being force exited back to the validator pool contract and having the Beacon Oracle bot force repay part of the loan from there. You will also have to pay interest on 928E worth of borrow.
+If you became whitelisted to say, 28E per 32E, the max effective leverage would be 8x and the max LTV would be 28/32 = 87.5%. This can only be done on a case-by-case basis via a governance vote.
+frxETH V2 Technical Details
+Smart contract and other details
+Overview Flowchart
+
+frxETH V2 Flowchart
+Beacon Oracle
+Validators are monitored, and their exit messages stored, offchain. The Beacon Oracle service/bot will trigger validator exits if borrow positions become unhealthy and/or validators get slashed. It also monitors ValidatorPool deposits, repays, withdrawals, etc and calculates how much borrow credit said pools should have.
+Curve AMO
+Unused ETH can wind up here and be invested into various Convex farms to earn yield passively. When the ETH is needed again, either for borrowing or for frxETH -> ETH redemptions, the farming LP can be unwound back into ETH and sent away. Operated by the Protocol.
+Ether Router
+Serves as a "middleman" contract for ETH flows. ETH from frxETH minting goes here. When ETH is needed for borrowing, it is sent to a ValidatorPool via the LendingPool. When ETH is needed for redemptions, it is sent to the RedemptionQueue. Unused ETH can temporarily be invested in the Curve AMO to earn yield, then be unwound when it is needed again. Profits from ValidatorPool interest payments also collect here.
+Key Functions
+getConsolidatedEthFrxEthBalance: Looks in various places for ETH and frxETH/sfrxETH in various forms, either free or in LPs. This information is primarily used for utilization calculations.
+requestEther: LendingPool calls this when someone borrows, and RedemptionQueue when someone is redeeming. The function first looks for idle ETH in the EtherRouter, then idle ETH in Curve AMOs, then LP'd ETH in the CurveAMOs.
+sweepEther: Operator can periodically sweep idle accumulated ETH into the Curve AMO and subsequent LPs so it can passively earn yield. These LP operations are gassy and hence, this operation is bot-called vs called whenever a normal user interacts (borrow/repay/mint frxETH/etc).
+FraxEtherMinter
+Takes ETH and mints frxETH. The collected ETH flows to the Ether Router to be used for lending, passive income, or frxETH redemption requests.
+Key Functions
+mintFrxEth / mintFrxEthAndGive: Takes in ETH and gives frxETH to the sender or the specified recipient.
+submitAndDeposit: Takes in ETH, converts it to frxETH, then deposits that to generate sfrxETH. Generated sfrxETH sent to the specified recipient.
+Lending Pool
+ValidatorPool partial deposits, borrows, liquidations, and repays go through here. BeaconOracle sets credit/allowances, validator count, etc.
+Key Functions
+addInterest / addInterestPrivileged: Manually accrue interest. Called inline in many other functions.
+currentRateInfo: Gets the interest ratePerSec and fullUtilizationRate, which can be used to calculate the borrow APR as follows:
+BorrowAPR=ratePerSec×oneYearInSecs×100
+BorrowAPR=ratePerSec×oneYearInSecs×100
+getUtilization: Gets the current utilization of the ETH in the system.
+setValidatorApprovals: Beacon Oracle bot approves validators for given validator pools.
+setVPoolCreditsPerValidator: Beacon Oracle bot sets the number of credits a validator pool would get per validator deposited.
+setVPoolValidatorCountsAndBorrowAllowances: Beacon Oracle bot adjusts validator count and borrow allowances for given validator pools
+wouldBeSolvent: Used to test if adding validators and/or a borrow amount to a given validator pool would make it insolvent.
+RedemptionQueue
+Users deposit their frxETH and, after a waiting period (varies depending on average Beacon Chain exit queue length), can collect ETH 1:1. After they deposit, they receive a redemption "ticket" NFT that is freely transferable. Their time of entry is marked in the NFT so earlier redeemers have preference over later redeemers if there is an ETH shortage (first come, first served). Due to this change, users will NOT have the option to exit the NFT early for a penalty as they could do in frxETH V1. After the wait, they can burn the redemption ticket NFT and receive back ETH 1:1 to frxETH.
+Key Functions
+canRedeem: Whether a FrxETHRedemptionTicket NFT and a specified amount of ETH can be redeemed. Depends if the NFT reached maturity and if ETH is available, partially or fully. If there is an ETH shortage, earlier NFTs will have redemption preference over later NFTs, even if both are time-eligible for redemption.
+ethShortageOrSurplus: Information as to whether the Redemption Queue has enough ETH to service all outstanding redemption tickets.
+enterRedemptionQueue / enterRedemptionQueueWithPermit / enterRedemptionQueueWithSfrxEthPermit / enterRedemptionQueueViaSfrxEth: Enter the Redemption Queue with either frxETH or sfrxETH, with/without permit. Will receive a FrxETHRedemptionTicket NFT after completion.
+fullRedeemNft / partialRedeemNft: Fully / Partially redeem a FrxETHRedemptionTicket NFT for ETH. NFT must have reached maturity. Will revert if there is not enough ETH, or there is, but it is earmarked for earlier NFTs.
+Validator Pool
+Users will need to be able to manage their ValidatorPool (VP). VP contracts are factory generated by the LendingPool contract and deployed by the user. Users deposit their own ETH in the VP, along with the public keys, signatures, and deposit data roots for their validators. All ETH2 staking rewards and exited ETH get sent back to the VP address. MEV can technically go elsewhere (we can't control that). Escrowed exit messages serve as the "collateral" for the system; the exited ETH returns to the VP and is trapped there until all outstanding loans are paid.
+Key Functions
+deposit: Payable function that takes the validator public key, signature, deposit data roots, and msg.value ETH, and deposits it into the ETH2 deposit contract. Integer multiples of 1 ETH between 1 ETH and 32 ETH. If they deposit less than 32 ETH and have the allowance for it, they can borrow the remainder to complete the 32 ETH validator deposit. Users will also have to independently submit the secret exit message to an API endpoint for safe storage before they can receive borrow credit. After reciept, BeaconOracle bot will grant the VP borrowing credit.
+requestFinalDeposit: Completes a 32 ETH deposit to spin up a validator, borrowing any remainder from the protocol in order to do so. For anonymous validators, 24 ETH of borrowing credit is given per 32 ETH deposited. There is an ability in the future for qualified and vetted projects to have more credit, perhaps as high as 31 ETH per 32 ETH deposited. This credit/allowance tracked off-chain to make sure the validator is legitimate, the exit message is escrowed, and the user is otherwise healthy. A bot (BeaconOracle) then periodically updates the allowance amounts on-chain.
+A special case for the 1st deposit for a given validator pool requires only 8 ETH by the user, with the rest being supplied by the protocol. This is safe for the protocol because the escrowed exit message is still required and if the validator is slashed, there is 8 ETH of buffer before the protocol itself takes a loss.
+borrow: If the validator pool has the allowance, borrows ETH from the LendingPool, which can then be used for spinning up more validators if desired.
+repayWithValue: Payable function that repays the msg.value amount of ETH for the validator pool's loan. Use's sender's ETH. Callable only by the VP owner or the LendingPool (in the case of a liquidation)
+repayAmount: Repays the specified amount of ETH for the validator pool's loan. Uses the validator pool's own ETH. Callable only by the VP owner or the LendingPool (in the case of a liquidation).
+repayShares: Same as repayAmount but uses lending shares instead.
+withdraw: Withdraw specified amount of ETH from the ValidatorPool to the intended recipient. Must pay ALL outstanding loans first. Will be unable to reuse the ValidatorPool contract until the BeaconOracle bot catches up and registers the withdrawal.
+VariableInterestRate
+Interest rate math for the ETH borrowing in the LendingPool. Uses same rationale / logic as Fraxlend's Variable Interest Rate.
+Addresses
+Assets
+frxETH
+Chain
+type
+Address
+Ethereum
+Native
+0x5e8422345238f34275888049021821e8e08caa1f
+Fraxtal
+Native
+0xfc00000000000000000000000000000000000006
+
+sfrxETH
+Chain
+type
+Address
+Ethereum
+Native
+0xac3E018457B222d93114458476f3E3416Abbe38F
+Fraxtal
+Native
+0xFC00000000000000000000000000000000000005
+
+Operations Contracts
+Chain
+Name
+Contract
+Ethereum
+BeaconOracle
+0xA2901F3EE8f4E9F5baC5379BC0CD1F8341280AB5
+Ethereum
+CurveLsdAmo
+0xEcb9bBb97BD3C23e8f176075EDB3c68B9a1869Ae
+Ethereum
+CurveLsdAmoHelper
+0x823F92b5fF0062EDc20F0545ec88f2f3c273cCbd
+Ethereum
+EtherRouter
+0x5acAf61d339dd123e60ba450Ea38fbC49445007C
+Ethereum
+FraxEtherMinter (V2)
+0x7Bc6bad540453360F744666D625fec0ee1320cA3
+Ethereum
+FraxEtherRedemptionQueueV2
+0xfDC69e6BE352BD5644C438302DE4E311AAD5565b
+Ethereum
+LendingPool
+0x24A1d1671a3Bd1C3cABb9B10724a4127d84e1Da0
+Ethereum
+VariableInterestRate
+0x2fA48925696EbBF1F4Fc08228dA06021f1806544
+Ethereum
+BeaconOracle
+0xA2901F3EE8f4E9F5baC5379BC0CD1F8341280AB5
+
+Multisigs
+Chain
+Name
+Contract
+Ethereum
+Comptroller
+0x8306300ffd616049FD7e4b0354a64Da835c1A81C
+
+
+
+

@@ -1,0 +1,30 @@
+{
+  "name": "storyvault-steward",
+  "version": "1.0.0",
+  "description": "StoryVault Steward - DeFi advisor analyzing life stories for personalized Fraxtal yield strategies",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "keywords": [
+    "defi",
+    "fraxtal",
+    "adk",
+    "agent",
+    "hackathon"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@iqai/adk": "^0.1.0",
+    "zod": "^3.23.8",
+    "dotenv": "^16.4.5",
+    "viem": "^2.21.54",
+    "tsx": "^4.19.2"
+  }
+}
