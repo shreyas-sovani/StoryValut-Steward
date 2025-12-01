@@ -24,6 +24,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   /https:\/\/.*\.vercel\.app$/,  // Any Vercel deployment
   "https://story-valut-steward.vercel.app",  // Your production domain
+  "https://story-valut-steward-snmf.vercel.app",  // Current Vercel deployment
 ];
 
 app.use("/*", cors({
