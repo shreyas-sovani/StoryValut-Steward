@@ -50,15 +50,14 @@ export const calculate_leverage_boost = createTool({
   schema: z.object({
     current_principal: z
       .number()
-      .positive()
+      .min(0.01)
       .describe("User's current savings amount in USD (e.g., 2000)"),
     target_amount: z
       .number()
-      .positive()
+      .min(0.01)
       .describe("User's financial goal in USD (e.g., 2500)"),
     time_horizon_months: z
       .number()
-      .positive()
       .int()
       .min(1)
       .max(120)
