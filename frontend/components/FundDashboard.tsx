@@ -1,13 +1,21 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Flame, Wallet, Activity, AlertTriangle, CheckCircle, Info, Copy, QrCode } from "lucide-react";
+import { Flame, Wallet, Activity, AlertTriangle, CheckCircle, Info, Copy, QrCode, DollarSign, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface WatcherLog {
   timestamp: string;
   type: "info" | "warning" | "critical" | "success";
   message: string;
+}
+
+interface FundingUpdate {
+  type: "funding_update";
+  status: "WAITING" | "DEPOSIT_DETECTED" | "INVESTED" | "EVACUATED";
+  amount?: string;
+  tx?: string;
+  timestamp: string;
 }
 
 interface FundDashboardProps {
@@ -23,12 +31,43 @@ export default function FundDashboard({
   const [balance, setBalance] = useState("0");
   const [yield_rate, setYieldRate] = useState(4.5);
   const [copied, setCopied] = useState(false);
+  const [fundingStatus, setFundingStatus] = useState<"WAITING" | "DEPOSIT_DETECTED" | "INVESTED" | "EVACUATED">("WAITING");
+  const [lastTx, setLastTx] = useState<string | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll logs
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
+
+  // SSE for real-time funding updates
+  useEffect(() => {
+    const eventSource = new EventSource(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/funding/stream`
+    );
+
+    eventSource.addEventListener("funding_update", (event) => {
+      const data: FundingUpdate = JSON.parse(event.data);
+      console.log("📡 Funding update:", data);
+      
+      setFundingStatus(data.status);
+      if (data.tx) {
+        setLastTx(data.tx);
+      }
+      if (data.amount) {
+        setBalance(data.amount);
+      }
+    });
+
+    eventSource.onerror = (error) => {
+      console.error("SSE connection error:", error);
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, []);
 
   // Fetch watcher status periodically
   useEffect(() => {
@@ -156,6 +195,104 @@ export default function FundDashboard({
               <div className="text-xs text-green-600 bg-black/50 p-3 rounded">
                 📤 Send FRAX to this address and the Agent will auto-invest
               </div>
+            </div>
+          </div>
+
+          {/* Funding Status Card - NEW! */}
+          <div className="bg-gray-900 border-2 border-green-500 rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Activity className="w-6 h-6 text-green-400" />
+              <h2 className="text-xl font-bold text-green-400">FUNDING STATUS</h2>
+            </div>
+            
+            <div className="space-y-6">
+              {/* State 1: Waiting for Deposit */}
+              {fundingStatus === "WAITING" && (
+                <div className="text-center py-8">
+                  <DollarSign className="w-16 h-16 text-green-600 mx-auto mb-4 animate-pulse" />
+                  <div className="text-2xl font-bold text-green-400 mb-2">
+                    WAITING FOR DEPOSIT
+                  </div>
+                  <div className="text-sm text-green-600">
+                    Send FRAX to the address above
+                  </div>
+                  <div className="text-xs text-green-700 mt-2">
+                    Auto-invest triggers at &gt;10 FRAX
+                  </div>
+                </div>
+              )}
+
+              {/* State 2: Deposit Detected */}
+              {fundingStatus === "DEPOSIT_DETECTED" && (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-ping">
+                    <DollarSign className="w-10 h-10 text-black" />
+                  </div>
+                  <div className="text-2xl font-bold text-green-400 mb-2 animate-pulse">
+                    💰 PAYMENT RECEIVED!
+                  </div>
+                  <div className="text-lg text-green-500">
+                    {balance} FRAX detected
+                  </div>
+                  <div className="text-sm text-green-600 mt-2">
+                    Executing auto-invest strategy...
+                  </div>
+                </div>
+              )}
+
+              {/* State 3: Invested */}
+              {fundingStatus === "INVESTED" && (
+                <div className="text-center py-8">
+                  <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
+                  <div className="text-2xl font-bold text-green-400 mb-2">
+                    ✅ ASSETS DEPLOYED
+                  </div>
+                  <div className="text-sm text-green-500 mb-3">
+                    Funds invested in sFRAX
+                  </div>
+                  {lastTx && lastTx !== "DEMO_MODE" && (
+                    <a
+                      href={`https://fraxscan.com/tx/${lastTx}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-green-600 hover:text-green-400 underline"
+                    >
+                      View on Fraxscan →
+                    </a>
+                  )}
+                  {lastTx === "DEMO_MODE" && (
+                    <div className="text-xs text-yellow-600">
+                      (Demo Mode - Set AGENT_PRIVATE_KEY for real execution)
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* State 4: Evacuated */}
+              {fundingStatus === "EVACUATED" && (
+                <div className="text-center py-8">
+                  <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4 animate-pulse" />
+                  <div className="text-2xl font-bold text-red-400 mb-2">
+                    🚨 FUNDS EVACUATED
+                  </div>
+                  <div className="text-sm text-red-500 mb-3">
+                    Emergency withdrawal executed
+                  </div>
+                  <div className="text-xs text-green-600">
+                    Assets secured in FRAX safety mode
+                  </div>
+                  {lastTx && lastTx !== "DEMO_MODE" && (
+                    <a
+                      href={`https://fraxscan.com/tx/${lastTx}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-red-600 hover:text-red-400 underline mt-2 block"
+                    >
+                      View evacuation TX →
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

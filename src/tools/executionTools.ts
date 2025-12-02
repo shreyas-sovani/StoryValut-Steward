@@ -78,9 +78,14 @@ async function getAgentWalletFn() {
 
     const walletInfo = {
       address: agentAccount.address,
+      status: "ACTIVE_LISTENING",
       balances: {
         FRAX: formatEther(fraxBalance),
         sFRAX: formatEther(sfraxBalance),
+      },
+      holdings: {
+        total_frax: formatEther(fraxBalance),
+        staked_sfrax: formatEther(sfraxBalance),
       },
       contracts: {
         sFRAX: SFRAX_CONTRACT,
@@ -123,6 +128,29 @@ export const get_agent_wallet = createTool({
     - FRAX balance (available capital)
     - sFRAX balance (staked capital)
     - Execution capability status
+  `,
+  schema: z.object({}),
+  fn: getAgentWalletFn,
+});
+
+// Alias tool with better name for user-facing conversations
+export const get_agent_vault_details = createTool({
+  name: "get_agent_vault_details",
+  description: `
+    Get the Agent's autonomous VAULT details - this is the address where users deposit funds.
+    
+    CRITICAL: Call this tool when the user agrees to a strategy.
+    DO NOT tell them to go to a website or deploy manually.
+    
+    Returns:
+    - Vault address (where users send FRAX)
+    - Current holdings (FRAX and sFRAX balances)
+    - Status: "ACTIVE_LISTENING" (ready to receive deposits)
+    - QR code URL for easy deposits
+    
+    After calling this, tell the user:
+    "I have initialized your autonomous vault. Please deposit your capital to this address: [address]. 
+    I will detect the deposit and auto-invest immediately."
   `,
   schema: z.object({}),
   fn: getAgentWalletFn,

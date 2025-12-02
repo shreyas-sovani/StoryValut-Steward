@@ -29,6 +29,12 @@ let watcherLogs: Array<{
   message: string;
 }> = [];
 
+// SSE clients for real-time funding updates
+const sseClients: Array<{
+  id: string;
+  stream: any;
+}> = [];
+
 // Helper to add watcher log
 function addWatcherLog(type: "info" | "warning" | "critical" | "success", message: string) {
   const log = {
@@ -43,6 +49,28 @@ function addWatcherLog(type: "info" | "warning" | "critical" | "success", messag
   }
   console.log(`[WATCHER ${type.toUpperCase()}] ${message}`);
   return log;
+}
+
+// Broadcast funding events to all connected SSE clients
+function broadcastFundingUpdate(eventData: {
+  type: "funding_update";
+  status: "DEPOSIT_DETECTED" | "INVESTED" | "EVACUATED" | "WAITING";
+  amount?: string;
+  tx?: string;
+  timestamp: string;
+}) {
+  console.log("📡 Broadcasting funding update to", sseClients.length, "clients:", eventData);
+  
+  for (const client of sseClients) {
+    try {
+      client.stream.writeSSE({
+        data: JSON.stringify(eventData),
+        event: "funding_update",
+      });
+    } catch (error) {
+      console.error("Failed to send SSE to client", client.id, error);
+    }
+  }
 }
 
 // CORS configuration for frontend
@@ -305,6 +333,49 @@ app.get("/api/watcher/logs/stream", (c) => {
   });
 });
 
+// GET /api/funding/stream - SSE stream for real-time funding updates
+app.get("/api/funding/stream", (c) => {
+  return streamSSE(c, async (stream) => {
+    const clientId = Math.random().toString(36).substring(7);
+    console.log(`📡 Client ${clientId} connected to funding stream`);
+    
+    // Add client to SSE clients list
+    sseClients.push({ id: clientId, stream });
+    
+    // Send initial status
+    await stream.writeSSE({
+      data: JSON.stringify({
+        type: "funding_update",
+        status: "WAITING",
+        timestamp: new Date().toISOString(),
+      }),
+      event: "funding_update",
+    });
+    
+    // Keep connection alive
+    const keepAlive = setInterval(async () => {
+      try {
+        await stream.writeSSE({
+          data: JSON.stringify({ type: "heartbeat" }),
+          event: "heartbeat",
+        });
+      } catch (error) {
+        console.error(`Failed to send heartbeat to client ${clientId}`);
+      }
+    }, 30000); // Every 30 seconds
+    
+    // Cleanup on disconnect
+    c.req.raw.signal.addEventListener("abort", () => {
+      clearInterval(keepAlive);
+      const index = sseClients.findIndex(client => client.id === clientId);
+      if (index !== -1) {
+        sseClients.splice(index, 1);
+      }
+      console.log(`📡 Client ${clientId} disconnected from funding stream (${sseClients.length} remaining)`);
+    });
+  });
+});
+
 // ============================================================================
 // AUTONOMOUS WATCHER LOOP (Phase 8 - The "Demo God Mode")
 // ============================================================================
@@ -321,6 +392,15 @@ async function autonomousWatcherLoop() {
       // Step 2: AUTO-INVEST Rule
       if (fraxBalance > 10 && fraxBalance !== parseFloat(lastKnownBalance)) {
         addWatcherLog("success", `💰 NEW CAPITAL DETECTED: ${fraxBalance.toFixed(2)} FRAX`);
+        
+        // Broadcast deposit detected
+        broadcastFundingUpdate({
+          type: "funding_update",
+          status: "DEPOSIT_DETECTED",
+          amount: fraxBalance.toFixed(2),
+          timestamp: new Date().toISOString(),
+        });
+        
         addWatcherLog("info", "🤖 AUTO-INVEST PROTOCOL: Executing conservative_mint strategy...");
         
         // Execute auto-investment
@@ -333,8 +413,26 @@ async function autonomousWatcherLoop() {
         const investData = JSON.parse(investResult);
         if (investData.status === "EXECUTED") {
           addWatcherLog("success", `✅ AUTO-INVEST COMPLETE: ${investData.transaction?.hash}`);
+          
+          // Broadcast invested
+          broadcastFundingUpdate({
+            type: "funding_update",
+            status: "INVESTED",
+            amount: (fraxBalance * 0.95).toFixed(2),
+            tx: investData.transaction?.hash,
+            timestamp: new Date().toISOString(),
+          });
         } else {
           addWatcherLog("warning", `⚠️ AUTO-INVEST DEMO: Would execute in production`);
+          
+          // Broadcast invested (demo)
+          broadcastFundingUpdate({
+            type: "funding_update",
+            status: "INVESTED",
+            amount: (fraxBalance * 0.95).toFixed(2),
+            tx: "DEMO_MODE",
+            timestamp: new Date().toISOString(),
+          });
         }
         
         lastKnownBalance = fraxBalance.toString();
@@ -354,8 +452,24 @@ async function autonomousWatcherLoop() {
         const evacuateData = JSON.parse(evacuateResult);
         if (evacuateData.status === "EXECUTED") {
           addWatcherLog("success", `✅ FUNDS EVACUATED: Holdings secured in FRAX`);
+          
+          // Broadcast evacuation
+          broadcastFundingUpdate({
+            type: "funding_update",
+            status: "EVACUATED",
+            tx: evacuateData.transaction?.hash,
+            timestamp: new Date().toISOString(),
+          });
         } else {
           addWatcherLog("warning", `⚠️ EVACUATION DEMO: Would execute in production`);
+          
+          // Broadcast evacuation (demo)
+          broadcastFundingUpdate({
+            type: "funding_update",
+            status: "EVACUATED",
+            tx: "DEMO_MODE",
+            timestamp: new Date().toISOString(),
+          });
         }
         
         // Reset yield after evacuation (for demo purposes)
