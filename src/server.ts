@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { createStoryStewardAgent } from "./agent.js";
+import { get_agent_wallet, execute_strategy, getAgentWalletFn, executeStrategyFn } from "./tools/executionTools.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -16,6 +17,33 @@ const app = new Hono();
 
 // Store agent runners by session
 const sessions = new Map<string, any>();
+
+// ============================================================================
+// AUTONOMOUS WATCHER STATE (Phase 8)
+// ============================================================================
+let current_yield = 4.5; // Default: Healthy 4.5% APY
+let lastKnownBalance = "0"; // Track FRAX balance
+let watcherLogs: Array<{
+  timestamp: string;
+  type: "info" | "warning" | "critical" | "success";
+  message: string;
+}> = [];
+
+// Helper to add watcher log
+function addWatcherLog(type: "info" | "warning" | "critical" | "success", message: string) {
+  const log = {
+    timestamp: new Date().toISOString(),
+    type,
+    message,
+  };
+  watcherLogs.push(log);
+  // Keep only last 50 logs
+  if (watcherLogs.length > 50) {
+    watcherLogs.shift();
+  }
+  console.log(`[WATCHER ${type.toUpperCase()}] ${message}`);
+  return log;
+}
 
 // CORS configuration for frontend
 // Allow localhost (development) and Vercel (production)
@@ -191,6 +219,185 @@ app.get("/api/sessions", (c) => {
     count: sessionList.length,
   });
 });
+
+// ============================================================================
+// PHASE 8: AUTONOMOUS HEDGE FUND ENDPOINTS
+// ============================================================================
+
+// POST /api/simulate/crash - Trigger a simulated market crash for demo
+app.post("/api/simulate/crash", (c) => {
+  console.log("\n🔥🔥🔥 SIMULATING MARKET CRASH 🔥🔥🔥\n");
+  
+  current_yield = 1.5; // Drop yield to crisis level
+  
+  addWatcherLog("critical", "📉 MARKET CRASH SIMULATED - Yield dropped to 1.5%");
+  addWatcherLog("warning", "⚠️ CRITICAL THRESHOLD BREACHED - Defensive protocols activated");
+  
+  return c.json({
+    status: "crash_simulated",
+    previous_yield: 4.5,
+    new_yield: 1.5,
+    message: "Market crash triggered - Watcher will auto-evacuate funds",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// POST /api/simulate/recovery - Trigger market recovery
+app.post("/api/simulate/recovery", (c) => {
+  console.log("\n✅ SIMULATING MARKET RECOVERY ✅\n");
+  
+  current_yield = 4.5; // Restore normal yield
+  
+  addWatcherLog("success", "✅ MARKET RECOVERED - Yield restored to 4.5%");
+  addWatcherLog("info", "📊 Normal operations resumed");
+  
+  return c.json({
+    status: "recovery_simulated",
+    previous_yield: 1.5,
+    new_yield: 4.5,
+    message: "Market recovered - Watcher monitoring normally",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// GET /api/watcher/status - Get current watcher state
+app.get("/api/watcher/status", (c) => {
+  return c.json({
+    current_yield,
+    last_known_balance: lastKnownBalance,
+    recent_logs: watcherLogs.slice(-10), // Last 10 logs
+    health_status: current_yield >= 3.5 ? "healthy" : current_yield >= 2.0 ? "warning" : "critical",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// GET /api/watcher/logs/stream - SSE stream for live logs
+app.get("/api/watcher/logs/stream", (c) => {
+  return streamSSE(c, async (stream) => {
+    console.log("📡 Client connected to watcher log stream");
+    
+    // Send initial logs
+    for (const log of watcherLogs.slice(-10)) {
+      await stream.writeSSE({
+        data: JSON.stringify(log),
+        event: "log",
+      });
+    }
+    
+    // Keep connection alive and send new logs
+    // In a real implementation, you'd use an event emitter pattern
+    // For now, we'll just keep the connection open
+    const interval = setInterval(async () => {
+      if (watcherLogs.length > 0) {
+        const lastLog = watcherLogs[watcherLogs.length - 1];
+        await stream.writeSSE({
+          data: JSON.stringify(lastLog),
+          event: "log",
+        });
+      }
+    }, 1000);
+    
+    // Cleanup on disconnect
+    c.req.raw.signal.addEventListener("abort", () => {
+      clearInterval(interval);
+      console.log("📡 Client disconnected from watcher log stream");
+    });
+  });
+});
+
+// ============================================================================
+// AUTONOMOUS WATCHER LOOP (Phase 8 - The "Demo God Mode")
+// ============================================================================
+
+async function autonomousWatcherLoop() {
+  try {
+    // Step 1: Check Agent Wallet Balance
+    const walletResult = await getAgentWalletFn();
+    const walletData = JSON.parse(walletResult);
+    
+    if (walletData.execution_capable) {
+      const fraxBalance = parseFloat(walletData.balances.FRAX);
+      
+      // Step 2: AUTO-INVEST Rule
+      if (fraxBalance > 10 && fraxBalance !== parseFloat(lastKnownBalance)) {
+        addWatcherLog("success", `💰 NEW CAPITAL DETECTED: ${fraxBalance.toFixed(2)} FRAX`);
+        addWatcherLog("info", "🤖 AUTO-INVEST PROTOCOL: Executing conservative_mint strategy...");
+        
+        // Execute auto-investment
+        const investResult = await executeStrategyFn({
+          strategy_type: "conservative_mint",
+          amount: (fraxBalance * 0.95).toString(), // Invest 95%, keep 5% for gas
+          reason: "Autonomous auto-invest triggered by new capital detection",
+        });
+        
+        const investData = JSON.parse(investResult);
+        if (investData.status === "EXECUTED") {
+          addWatcherLog("success", `✅ AUTO-INVEST COMPLETE: ${investData.transaction?.hash}`);
+        } else {
+          addWatcherLog("warning", `⚠️ AUTO-INVEST DEMO: Would execute in production`);
+        }
+        
+        lastKnownBalance = fraxBalance.toString();
+      }
+      
+      // Step 3: PROTECTION Rule (The Crash Response)
+      if (current_yield < 2.0) {
+        addWatcherLog("critical", `🚨 CRITICAL YIELD DETECTED: ${current_yield}%`);
+        addWatcherLog("critical", "🚨 EMERGENCY PROTOCOL: Evacuating funds to safety...");
+        
+        // Execute emergency withdrawal
+        const evacuateResult = await executeStrategyFn({
+          strategy_type: "emergency_withdraw",
+          reason: `Autonomous evacuation triggered by yield crash (${current_yield}%)`,
+        });
+        
+        const evacuateData = JSON.parse(evacuateResult);
+        if (evacuateData.status === "EXECUTED") {
+          addWatcherLog("success", `✅ FUNDS EVACUATED: Holdings secured in FRAX`);
+        } else {
+          addWatcherLog("warning", `⚠️ EVACUATION DEMO: Would execute in production`);
+        }
+        
+        // Reset yield after evacuation (for demo purposes)
+        setTimeout(() => {
+          current_yield = 4.5;
+          addWatcherLog("info", "✅ Demo reset: Yield restored to 4.5%");
+        }, 15000); // Reset after 15 seconds
+      }
+      
+      // Step 4: Regular monitoring log
+      if (fraxBalance === 0) {
+        addWatcherLog("info", "👀 Monitoring: Waiting for capital deposit...");
+      } else {
+        addWatcherLog("info", `📊 Monitoring: ${fraxBalance.toFixed(2)} FRAX | Yield: ${current_yield}%`);
+      }
+    } else {
+      // Demo mode
+      addWatcherLog("info", `📊 DEMO MODE: Yield ${current_yield}% | Set AGENT_PRIVATE_KEY for live execution`);
+    }
+    
+  } catch (error) {
+    console.error("❌ Watcher loop error:", error);
+    addWatcherLog("warning", `⚠️ Watcher error: ${error instanceof Error ? error.message : "Unknown"}`);
+  }
+}
+
+// Start the watcher loop (runs every 5 seconds)
+let watcherInterval: NodeJS.Timeout;
+
+function startWatcherLoop() {
+  addWatcherLog("success", "🛡️ AUTONOMOUS WATCHER ACTIVATED");
+  addWatcherLog("info", "🤖 Monitoring wallet and yield conditions...");
+  
+  watcherInterval = setInterval(autonomousWatcherLoop, 5000); // 5 seconds
+  
+  // Run immediately on start
+  autonomousWatcherLoop();
+}
+
+// Start watcher on server initialization
+console.log("🤖 Initializing Autonomous Watcher...");
+startWatcherLoop();
 
 // Start the server
 const port = parseInt(process.env.PORT || "3001");
