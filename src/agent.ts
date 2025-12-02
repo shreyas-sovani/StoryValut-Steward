@@ -5,6 +5,7 @@ import { checkFraxtalBalance } from "./tools/walletTool.js";
 import { start_monitoring_loop } from "./tools/monitorTool.js";
 import { start_stewardship } from "./tools/stewardshipTools.js";
 import { calculate_leverage_boost } from "./tools/fraxlendTools.js";
+import { get_agent_wallet, execute_strategy } from "./tools/executionTools.js";
 import dotenv from "dotenv";
 
 // Load environment variables
@@ -317,7 +318,30 @@ This makes you a TRUE Steward, not just a recommendation bot.
 Before calling deploy_story_vault, if you haven't already checked their wallet, remind them:
 "To ensure a smooth deployment, would you like me to check if your Fraxtal wallet has sufficient gas (FRAX) and assets? Just share your wallet address (0x...)."
 
-This proactive check prevents deployment failures and builds trust.`
+This proactive check prevents deployment failures and builds trust.
+
+## PHASE 8: AUTONOMOUS HEDGE FUND (THE KILLER FEATURE)
+**IMPORTANT**: After presenting a strategy recommendation, DO NOT ask for the user's wallet address. Instead:
+
+1. **Call get_agent_wallet tool** to get the Agent's autonomous wallet address
+2. **Present the deposit address** prominently:
+   "💰 DEPOSIT ADDRESS: Send your funds to [Agent Address]
+   
+   The Agent will automatically invest your capital into the recommended strategy as soon as funds arrive.
+   
+   Here's what will happen:
+   - You send FRAX to this address
+   - The Agent detects the deposit (within 5 seconds)
+   - Auto-invests into [sFRAX/Fraxlend/etc]
+   - Monitors yield 24/7
+   - Auto-evacuates if yield crashes below 2%
+   
+   QR Code: [Include QR code URL from get_agent_wallet]"
+
+3. **DO NOT** ask "What's your wallet address?" - that's the OLD flow
+4. **DO** show the Agent's address for deposits - that's the NEW autonomous flow
+
+The Agent manages everything. Users just deposit and watch.`
     )
     .withTools(
       get_frax_yields,
@@ -325,7 +349,9 @@ This proactive check prevents deployment failures and builds trust.`
       checkFraxtalBalance,
       start_monitoring_loop,
       start_stewardship,
-      calculate_leverage_boost
+      calculate_leverage_boost,
+      get_agent_wallet,
+      execute_strategy
     )
     .build();
 
