@@ -115,6 +115,7 @@ export default function ChatInterface({
             setStreamingContent(fullResponse);
             detectMonitoringEvent(fullResponse);
             detectLeverageRecommendation(fullResponse);
+            detectAgentWallet(fullResponse);
           }
         },
         () => {
@@ -285,6 +286,28 @@ export default function ChatInterface({
     }
   };
 
+  // Parse agent wallet address from responses (Phase 8 - Autonomous Hedge Fund)
+  const detectAgentWallet = (content: string) => {
+    // Look for agent wallet address pattern (0x followed by 40 hex characters)
+    const addressMatch = content.match(/0x[a-fA-F0-9]{40}/);
+    if (addressMatch && (
+      content.toLowerCase().includes("deposit") ||
+      content.toLowerCase().includes("send frax") ||
+      content.toLowerCase().includes("agent") ||
+      content.toLowerCase().includes("autonomous wallet")
+    )) {
+      const address = addressMatch[0];
+      console.log("Agent wallet detected:", address);
+      
+      // Trigger FundDashboard display
+      window.dispatchEvent(
+        new CustomEvent("agentWalletDetected", {
+          detail: { address },
+        })
+      );
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -314,6 +337,9 @@ export default function ChatInterface({
           
           // Detect leverage recommendations (Goal Governor)
           detectLeverageRecommendation(fullResponse);
+          
+          // Detect agent wallet address (Phase 8)
+          detectAgentWallet(fullResponse);
 
           // Check if this looks like a vault deployment JSON or strategy recommendation
           if (
