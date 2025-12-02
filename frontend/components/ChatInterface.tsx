@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Send, Loader2, Sparkles, Activity } from "lucide-react";
 import { sendChatMessage, type ChatMessage, type SSEEvent } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import OpportunityCard from "@/components/OpportunityCard";
 
 interface MonitoringData {
   active: boolean;
@@ -17,6 +18,35 @@ interface MonitoringData {
     severity: "info" | "warning" | "critical";
     timestamp: string;
   };
+}
+
+interface LeverageRecommendation {
+  status: "BEHIND_SCHEDULE" | "ON_TRACK";
+  current_projection: number;
+  shortfall?: number;
+  target_amount: number;
+  timeline_months: number;
+  base_apy: number;
+  recommendation?: {
+    action: string;
+    leverage_ratio: string;
+    leverage_ratio_numeric: number;
+    new_apy: string;
+    new_apy_numeric: number;
+    projected_with_boost: number;
+    risk_level: "Low" | "Medium" | "High";
+    risk_description: string;
+    explanation: string;
+    how_it_works: string;
+    example_flow: string[];
+  };
+  fraxlend_details?: {
+    pair: string;
+    supply_apy: string;
+    borrow_apr: string;
+    max_ltv: string;
+  };
+  warning?: string | null;
 }
 
 interface ChatInterfaceProps {
@@ -34,6 +64,7 @@ export default function ChatInterface({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [leverageRecommendation, setLeverageRecommendation] = useState<LeverageRecommendation | null>(null);
   const [monitoring, setMonitoring] = useState<MonitoringData>({
     active: false,
     asset: "",
@@ -83,6 +114,7 @@ export default function ChatInterface({
             fullResponse += chunk.content;
             setStreamingContent(fullResponse);
             detectMonitoringEvent(fullResponse);
+            detectLeverageRecommendation(fullResponse);
           }
         },
         () => {
@@ -231,6 +263,28 @@ export default function ChatInterface({
     }
   };
 
+  // Parse leverage recommendation from agent responses (Goal Governor)
+  const detectLeverageRecommendation = (content: string) => {
+    // Look for BEHIND_SCHEDULE status or ON_TRACK status
+    if (content.includes('"status"') && (content.includes('"BEHIND_SCHEDULE"') || content.includes('"ON_TRACK"'))) {
+      try {
+        // Extract JSON - try to find the complete recommendation object
+        const jsonMatch = content.match(/\{[\s\S]*?"status"[\s\S]*?\}/);
+        if (jsonMatch) {
+          const leverageData = JSON.parse(jsonMatch[0]);
+          
+          // Validate it has the required fields
+          if (leverageData.status && leverageData.current_projection !== undefined) {
+            setLeverageRecommendation(leverageData);
+          }
+        }
+      } catch (e) {
+        // Not valid JSON yet or incomplete, continue streaming
+        console.log("Parsing leverage recommendation, not complete yet:", e);
+      }
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -257,6 +311,9 @@ export default function ChatInterface({
 
           // Detect monitoring events
           detectMonitoringEvent(fullResponse);
+          
+          // Detect leverage recommendations (Goal Governor)
+          detectLeverageRecommendation(fullResponse);
 
           // Check if this looks like a vault deployment JSON or strategy recommendation
           if (
@@ -485,6 +542,18 @@ export default function ChatInterface({
           {messages.map((message, index) => (
             <MessageBubble key={index} message={message} />
           ))}
+
+          {/* Leverage Recommendation Card (Goal Governor) */}
+          {leverageRecommendation && (
+            <OpportunityCard 
+              data={leverageRecommendation}
+              onActivate={() => {
+                // TODO: Implement activation flow
+                console.log("Activating leverage boost:", leverageRecommendation);
+                alert(`Activating ${leverageRecommendation.recommendation?.leverage_ratio} leverage boost! (Demo mode)`);
+              }}
+            />
+          )}
 
           {streamingContent && (
             <MessageBubble
