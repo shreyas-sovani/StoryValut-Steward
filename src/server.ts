@@ -389,9 +389,9 @@ async function autonomousWatcherLoop() {
     if (walletData.execution_capable) {
       const fraxBalance = parseFloat(walletData.balances.FRAX);
       
-      // Step 2: AUTO-INVEST Rule
-      if (fraxBalance > 10 && fraxBalance !== parseFloat(lastKnownBalance)) {
-        addWatcherLog("success", `💰 NEW CAPITAL DETECTED: ${fraxBalance.toFixed(2)} FRAX`);
+      // Step 2: AUTO-INVEST Rule (0.01 FRAX minimum for testing)
+      if (fraxBalance > 0.01 && fraxBalance !== parseFloat(lastKnownBalance)) {
+        addWatcherLog("success", `💰 NEW CAPITAL DETECTED: ${fraxBalance.toFixed(4)} FRAX`);
         
         // Broadcast deposit detected
         broadcastFundingUpdate({

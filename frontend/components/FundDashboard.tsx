@@ -217,7 +217,7 @@ export default function FundDashboard({
                     Send FRAX to the address above
                   </div>
                   <div className="text-xs text-green-700 mt-2">
-                    Auto-invest triggers at &gt;10 FRAX
+                    Auto-invest triggers at &gt;0.01 FRAX (testing mode)
                   </div>
                 </div>
               )}
@@ -348,7 +348,7 @@ export default function FundDashboard({
 
               {/* Thresholds */}
               <div className="text-xs text-green-600 bg-black/50 p-3 rounded space-y-1">
-                <div>⚡ Auto-Invest: {">"}10 FRAX</div>
+                <div>⚡ Auto-Invest: {">"}0.01 FRAX (test mode)</div>
                 <div>🚨 Evacuate: {"<"}2.0% Yield</div>
               </div>
             </div>
