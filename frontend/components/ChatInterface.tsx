@@ -291,31 +291,39 @@ export default function ChatInterface({
     // Look for agent wallet address pattern (0x followed by 40 hex characters)
     const addressMatch = content.match(/0x[a-fA-F0-9]{40}/);
     
-    // More flexible detection - trigger if we have address AND any vault-related keywords
-    // This catches multiple output formats from the agent
+    if (!addressMatch) {
+      console.log("🔍 No address found in response yet");
+      return;
+    }
+    
+    // More flexible detection - trigger redirect when:
+    // 1. We have an address AND
+    // 2. The message indicates vault initialization/readiness
     const lowerContent = content.toLowerCase();
     
-    console.log("🔍 Checking for vault deployment...");
-    console.log("   Address found:", !!addressMatch);
-    console.log("   Contains 'autonomous vault':", lowerContent.includes("autonomous vault"));
-    console.log("   Contains 'i detect your deposit':", lowerContent.includes("i detect your deposit"));
+    console.log("🔍 Address detected:", addressMatch[0]);
+    console.log("   Checking for vault initialization keywords...");
     
-    if (addressMatch && (
+    // Trigger redirect if we see vault-related keywords OR user agreement context
+    const shouldRedirect = (
       lowerContent.includes("autonomous vault") ||
       lowerContent.includes("your vault") ||
+      lowerContent.includes("initializing") ||
+      lowerContent.includes("redirecting") ||
+      lowerContent.includes("fund dashboard") ||
+      lowerContent.includes("🚀") || // Rocket emoji for "launching"
       lowerContent.includes("🏦") || // Vault emoji
-      lowerContent.includes("active_listening") || // JSON status field
-      lowerContent.includes("active listening") || // Formatted output
-      (lowerContent.includes("deposit") && lowerContent.includes("0x")) || // Any deposit instruction with address
-      lowerContent.includes("send your frax") ||
-      lowerContent.includes("i detect your deposit") ||
-      lowerContent.includes("i automatically invest") ||
-      lowerContent.includes("📍") // Location pin emoji often used for addresses
-    )) {
+      lowerContent.includes("active_listening") ||
+      lowerContent.includes("vault at 0x") || // "Your vault at 0x..."
+      (lowerContent.includes("ready") && lowerContent.includes("0x")) ||
+      (lowerContent.includes("set up") && lowerContent.includes("0x"))
+    );
+    
+    if (shouldRedirect) {
       const address = addressMatch[0];
-      console.log("🎉 VAULT DEPLOYMENT DETECTED!");
+      console.log("🎉 VAULT INITIALIZATION DETECTED!");
       console.log("   Address:", address);
-      console.log("   Dispatching agentWalletDetected event...");
+      console.log("   Triggering redirect to FundDashboard...");
       
       // Trigger FundDashboard display
       window.dispatchEvent(
@@ -324,7 +332,9 @@ export default function ChatInterface({
         })
       );
       
-      console.log("✅ Event dispatched successfully");
+      console.log("✅ Redirect event dispatched!");
+    } else {
+      console.log("   No vault keywords found - not redirecting yet");
     }
   };
 
