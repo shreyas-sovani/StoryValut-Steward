@@ -3,7 +3,13 @@ import { serve } from "@hono/node-server";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { createStoryStewardAgent } from "./agent.js";
-import { get_agent_wallet, execute_strategy, getAgentWalletFn, executeStrategyFn } from "./tools/executionTools.js";
+import { 
+  get_agent_wallet, 
+  execute_strategy, 
+  getAgentWalletFn, 
+  executeStrategyFn,
+  executeRealMicroInvestmentFn 
+} from "./tools/executionTools.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -19,12 +25,13 @@ const app = new Hono();
 const sessions = new Map<string, any>();
 
 // ============================================================================
-// AUTONOMOUS WATCHER STATE (Phase 8)
+// AUTONOMOUS WATCHER STATE (Phase 8 - Micro-Investment Edition)
 // ============================================================================
 let current_yield = 4.5; // Default: Healthy 4.5% APY
-let lastKnownBalance = "0"; // Track FRAX balance
+let lastKnownBalance = "0"; // Track frxETH balance
 let isInvesting = false; // Prevent concurrent investments
 let isEvacuating = false; // Prevent concurrent evacuations
+let investmentExecuted = false; // ONE-TIME FLAG: Prevents re-investing after first success
 let watcherLogs: Array<{
   timestamp: string;
   type: "info" | "warning" | "critical" | "success";
@@ -402,145 +409,115 @@ async function autonomousWatcherLoop() {
     const walletData = JSON.parse(walletResult);
     
     if (walletData.execution_capable) {
-      const fraxBalance = parseFloat(walletData.balances.FRAX);
+      const frxethBalance = parseFloat(walletData.balances.frxETH || "0");
       
       // DEBUG: Log balance check details
-      console.log(`[WATCHER DEBUG] Current FRAX balance: ${fraxBalance.toFixed(6)}`);
+      console.log(`[WATCHER DEBUG] Current frxETH balance: ${frxethBalance.toFixed(6)}`);
       console.log(`[WATCHER DEBUG] Last known balance: ${lastKnownBalance}`);
-      console.log(`[WATCHER DEBUG] Balance increased: ${fraxBalance > parseFloat(lastKnownBalance)}`);
-      console.log(`[WATCHER DEBUG] Above minimum (0.01): ${fraxBalance > 0.01}`);
+      console.log(`[WATCHER DEBUG] Balance increased: ${frxethBalance > parseFloat(lastKnownBalance)}`);
+      console.log(`[WATCHER DEBUG] Above micro-threshold (0.0001): ${frxethBalance > 0.0001}`);
       console.log(`[WATCHER DEBUG] Not investing: ${!isInvesting}`);
+      console.log(`[WATCHER DEBUG] Investment executed flag: ${investmentExecuted}`);
       
-      // CRITICAL FIX: Initialize lastKnownBalance on first run to prevent auto-investing on server restart
-      if (lastKnownBalance === "0" && fraxBalance > 0) {
-        lastKnownBalance = fraxBalance.toString();
-        addWatcherLog("info", `🔄 Server started: Tracking existing balance of ${fraxBalance.toFixed(4)} FRAX (no auto-invest on restart)`);
+      // CRITICAL FIX: Initialize lastKnownBalance on first run
+      if (lastKnownBalance === "0" && frxethBalance > 0) {
+        lastKnownBalance = frxethBalance.toString();
+        addWatcherLog("info", `🔄 Server started: Tracking existing balance of ${frxethBalance.toFixed(6)} frxETH (no auto-invest on restart)`);
         console.log(`[WATCHER DEBUG] Initialized lastKnownBalance to: ${lastKnownBalance}`);
       }
       
-      // Step 2: AUTO-INVEST Rule (0.01 FRAX minimum for testing)
-      // Only invest if balance INCREASED from last known balance
-      if (fraxBalance > 0.01 && fraxBalance > parseFloat(lastKnownBalance) && !isInvesting) {
+      // Step 2: MICRO-INVESTMENT Rule (0.0001 frxETH minimum, ONE-TIME ONLY)
+      // Only invest if:
+      // 1. Balance increased from last known
+      // 2. Above micro-threshold (0.0001 frxETH)
+      // 3. Not currently investing
+      // 4. Haven't already invested (ONE-TIME FLAG)
+      if (
+        frxethBalance > 0.0001 && 
+        frxethBalance > parseFloat(lastKnownBalance) && 
+        !isInvesting && 
+        !investmentExecuted
+      ) {
         isInvesting = true; // Set flag immediately to prevent concurrent investments
         
-        const depositAmount = fraxBalance - parseFloat(lastKnownBalance);
-        lastKnownBalance = fraxBalance.toString(); // Update balance BEFORE investing
+        const depositAmount = frxethBalance - parseFloat(lastKnownBalance);
+        lastKnownBalance = frxethBalance.toString(); // Update balance BEFORE investing
         
-        console.log(`[WATCHER] 🎉 DEPOSIT DETECTED! Amount: +${depositAmount.toFixed(6)} FRAX`);
-        addWatcherLog("success", `💰 NEW CAPITAL DETECTED: +${depositAmount.toFixed(4)} FRAX (Total: ${fraxBalance.toFixed(4)})`);
+        console.log(`[WATCHER] 🎉 DEPOSIT DETECTED! Amount: +${depositAmount.toFixed(6)} frxETH`);
+        addWatcherLog("success", `💰 NEW CAPITAL DETECTED: +${depositAmount.toFixed(6)} frxETH (Total: ${frxethBalance.toFixed(6)})`);
         
         // Broadcast deposit detected
         broadcastFundingUpdate({
           type: "funding_update",
           status: "DEPOSIT_DETECTED",
-          amount: fraxBalance.toFixed(2),
+          amount: frxethBalance.toFixed(6),
           timestamp: new Date().toISOString(),
         });
         
-        addWatcherLog("info", "🤖 AUTO-INVEST PROTOCOL: Executing conservative_mint strategy...");
+        addWatcherLog("info", "🤖 MICRO-INVESTMENT PROTOCOL: Executing 0.0001 frxETH stake...");
         
         try {
-          // Execute auto-investment
-          const investResult = await executeStrategyFn({
-            strategy_type: "conservative_mint",
-            amount: (fraxBalance * 0.95).toString(), // Invest 95%, keep 5% for gas
-            reason: "Autonomous auto-invest triggered by new capital detection",
-          });
+          // Execute MICRO-INVESTMENT (0.0001 frxETH only)
+          const investResult = await executeRealMicroInvestmentFn();
           
           const investData = JSON.parse(investResult);
-          if (investData.status === "EXECUTED") {
-            addWatcherLog("success", `✅ AUTO-INVEST COMPLETE: ${investData.transaction?.hash}`);
+          if (investData.status === "SUCCESS") {
+            addWatcherLog("success", `✅ MICRO-INVESTMENT COMPLETE!`);
+            addWatcherLog("success", `📦 Wrap TX: ${investData.transactions.wrap.hash}`);
+            addWatcherLog("success", `🔐 Approve TX: ${investData.transactions.approve.hash}`);
+            addWatcherLog("success", `💎 Deposit TX: ${investData.transactions.deposit.hash}`);
+            addWatcherLog("info", `💰 Invested: ${investData.invested_amount} frxETH`);
+            addWatcherLog("info", `🏦 sfrxETH Balance: ${investData.balances.sfrxeth}`);
+            addWatcherLog("info", `� Now Earning: ${investData.yield.expected_apy} APY`);
+            
+            // SET ONE-TIME FLAG: Never invest again automatically
+            investmentExecuted = true;
+            console.log(`[WATCHER] ✅ ONE-TIME INVESTMENT COMPLETED - Flag set to prevent re-investment`);
             
             // Broadcast invested
             broadcastFundingUpdate({
               type: "funding_update",
               status: "INVESTED",
-              amount: (fraxBalance * 0.95).toFixed(2),
-              tx: investData.transaction?.hash,
+              amount: investData.invested_amount,
+              tx: investData.transactions.deposit.hash,
               timestamp: new Date().toISOString(),
             });
+          } else if (investData.status === "INSUFFICIENT_BALANCE") {
+            addWatcherLog("warning", `⚠️ Balance too low for micro-investment (need 0.002 frxETH minimum)`);
+            addWatcherLog("info", `💡 Current: ${investData.current_balance} | Required: ${investData.minimum_required}`);
           } else {
-            addWatcherLog("warning", `⚠️ AUTO-INVEST DEMO: Would execute in production`);
-            
-            // Broadcast invested (demo)
-            broadcastFundingUpdate({
-              type: "funding_update",
-              status: "INVESTED",
-              amount: (fraxBalance * 0.95).toFixed(2),
-              tx: "DEMO_MODE",
-              timestamp: new Date().toISOString(),
-            });
+            addWatcherLog("warning", `⚠️ MICRO-INVESTMENT: ${investData.status}`);
           }
         } catch (error) {
-          addWatcherLog("critical", `❌ AUTO-INVEST FAILED: ${error}`);
+          addWatcherLog("critical", `❌ MICRO-INVESTMENT FAILED: ${error}`);
+          console.error("[WATCHER ERROR]", error);
         } finally {
           isInvesting = false; // Release flag after investment completes or fails
         }
+      } else if (investmentExecuted) {
+        // Already invested - just monitor
+        if (Math.random() < 0.1) { // Log occasionally (10% chance per cycle)
+          addWatcherLog("info", `✅ Micro-investment already executed | Balance: ${frxethBalance.toFixed(6)} frxETH`);
+        }
       }
       
-      // Step 3: PROTECTION Rule (The Crash Response)
-      if (current_yield < 2.0 && !isEvacuating) {
-        isEvacuating = true; // Set flag to prevent concurrent evacuations
-        
-        addWatcherLog("critical", `🚨 CRITICAL YIELD DETECTED: ${current_yield}%`);
-        addWatcherLog("critical", "🚨 EMERGENCY PROTOCOL: Evacuating funds to safety...");
-        
-        try {
-          // Execute emergency withdrawal
-          const evacuateResult = await executeStrategyFn({
-            strategy_type: "emergency_withdraw",
-            reason: `Autonomous evacuation triggered by yield crash (${current_yield}%)`,
-          });
-          
-          const evacuateData = JSON.parse(evacuateResult);
-          if (evacuateData.status === "EXECUTED") {
-            addWatcherLog("success", `✅ FUNDS EVACUATED: Holdings secured in FRAX`);
-            
-            // Broadcast evacuation
-            broadcastFundingUpdate({
-              type: "funding_update",
-              status: "EVACUATED",
-              tx: evacuateData.transaction?.hash,
-              timestamp: new Date().toISOString(),
-            });
-          } else {
-            addWatcherLog("warning", `⚠️ EVACUATION DEMO: Would execute in production`);
-            
-            // Broadcast evacuation (demo)
-            broadcastFundingUpdate({
-              type: "funding_update",
-              status: "EVACUATED",
-              tx: "DEMO_MODE",
-              timestamp: new Date().toISOString(),
-            });
-          }
-          
-          // Reset yield after evacuation (for demo purposes)
-          setTimeout(() => {
-            current_yield = 4.5;
-            addWatcherLog("info", "✅ Demo reset: Yield restored to 4.5%");
-            isEvacuating = false; // Also reset flag on recovery
-          }, 15000); // Reset after 15 seconds
-          
-        } catch (error) {
-          addWatcherLog("critical", `❌ EVACUATION FAILED: ${error}`);
-        } finally {
-          isEvacuating = false; // Release flag after evacuation completes or fails
-        }
-      } else if (current_yield >= 2.0 && isEvacuating) {
-        // Yield recovered while evacuating - reset flag
-        isEvacuating = false;
+      // Step 3: PROTECTION Rule (Emergency Evacuation - NOT USED for micro-investment)
+      // Keep this disabled for micro-investment demo to preserve funds
+      if (current_yield < 1.0 && !isEvacuating) {
+        addWatcherLog("warning", `⚠️ Low yield detected: ${current_yield}% (Emergency evacuation disabled for micro-investment demo)`);
       }
       
       // Step 4: Regular monitoring log
-      if (fraxBalance === 0) {
+      if (frxethBalance === 0) {
         addWatcherLog("info", "👀 Monitoring: Waiting for capital deposit...");
-      } else {
-        addWatcherLog("info", `📊 Monitoring: ${fraxBalance.toFixed(2)} FRAX | Yield: ${current_yield}%`);
+      } else if (Math.random() < 0.2) { // Log occasionally (20% chance per cycle)
+        addWatcherLog("info", `📊 Monitoring: ${frxethBalance.toFixed(6)} frxETH | Yield: ${current_yield}%`);
       }
     } else {
       // Demo mode
-      addWatcherLog("info", `📊 DEMO MODE: Yield ${current_yield}% | Set AGENT_PRIVATE_KEY for live execution`);
+      if (Math.random() < 0.2) { // Log occasionally
+        addWatcherLog("info", `📊 DEMO MODE: Yield ${current_yield}% | Set AGENT_PRIVATE_KEY for live execution`);
+      }
     }
     
   } catch (error) {

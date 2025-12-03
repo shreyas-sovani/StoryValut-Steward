@@ -81,6 +81,274 @@ if (AGENT_PRIVATE_KEY && AGENT_PRIVATE_KEY !== "0x") {
 }
 
 // ============================================================================
+// MICRO-INVESTMENT STRATEGY (PRODUCTION-SAFE FOR LIMITED FUNDS)
+// ============================================================================
+
+/**
+ * Execute a REAL micro-investment into sfrxETH vault.
+ * 
+ * SAFETY FEATURES:
+ * - Hardcoded 0.0001 frxETH investment (~$0.35)
+ * - Requires minimum 0.002 frxETH balance before executing
+ * - 3-step process: Wrap -> Approve -> Deposit
+ * - Full transaction verification at each step
+ * 
+ * USE CASE: Production demo with limited funds (~$15 total)
+ */
+async function executeRealMicroInvestmentFn() {
+  console.log("\n🎯 ====== MICRO-INVESTMENT PROTOCOL ======");
+  console.log("💰 Target: 0.0001 frxETH (~$0.35)");
+  console.log("🛡️ Safety: Preserving gas for future operations");
+  
+  // ========================================================================
+  // SAFETY CHECK: Verify Agent Wallet Has Sufficient Balance
+  // ========================================================================
+  if (!agentAccount || !walletClient) {
+    return JSON.stringify({
+      status: "DEMO_MODE",
+      error: "Agent wallet not initialized - Set AGENT_PRIVATE_KEY in .env",
+    }, null, 2);
+  }
+
+  try {
+    // Get current frxETH balance
+    const currentBalance = await publicClient.getBalance({
+      address: agentAccount.address,
+    });
+
+    const MIN_BALANCE = parseEther("0.002"); // Must have at least 0.002 frxETH
+    const INVEST_AMOUNT = parseEther("0.0001"); // Invest exactly 0.0001 frxETH
+
+    console.log(`💰 Current Balance: ${formatEther(currentBalance)} frxETH`);
+    console.log(`🔒 Minimum Required: ${formatEther(MIN_BALANCE)} frxETH`);
+    console.log(`📊 Investment Amount: ${formatEther(INVEST_AMOUNT)} frxETH`);
+
+    // ABORT if balance too low
+    if (currentBalance < MIN_BALANCE) {
+      console.log(`❌ INSUFFICIENT BALANCE - Need ${formatEther(MIN_BALANCE - currentBalance)} more frxETH`);
+      
+      return JSON.stringify({
+        status: "INSUFFICIENT_BALANCE",
+        error: "Balance too low for safe micro-investment",
+        current_balance: formatEther(currentBalance),
+        minimum_required: formatEther(MIN_BALANCE),
+        shortfall: formatEther(MIN_BALANCE - currentBalance),
+      }, null, 2);
+    }
+
+    console.log("✅ Balance check passed - Proceeding with micro-investment\n");
+
+    // ========================================================================
+    // STEP 1: WRAP frxETH → wfrxETH
+    // ========================================================================
+    console.log("📦 STEP 1/3: Wrapping 0.0001 frxETH → wfrxETH...");
+    
+    const wrapTx = await walletClient.sendTransaction({
+      to: WFRXETH_CONTRACT,
+      value: INVEST_AMOUNT,
+      data: "0xd0e30db0", // deposit() function signature
+    });
+
+    console.log(`⏳ Wrap TX sent: ${wrapTx}`);
+    console.log(`🔗 Explorer: https://fraxscan.com/tx/${wrapTx}`);
+    
+    const wrapReceipt = await publicClient.waitForTransactionReceipt({
+      hash: wrapTx,
+    });
+
+    if (wrapReceipt.status === "reverted") {
+      throw new Error("Wrap transaction reverted - Check contract address");
+    }
+
+    console.log(`✅ Step 1 Complete - Block ${wrapReceipt.blockNumber}`);
+    console.log(`⛽ Gas Used: ${wrapReceipt.gasUsed.toString()}\n`);
+
+    // ========================================================================
+    // STEP 2: APPROVE wfrxETH for sfrxETH vault
+    // ========================================================================
+    console.log("🔐 STEP 2/3: Approving sfrxETH vault to spend 0.0001 wfrxETH...");
+    
+    const approveTx = await walletClient.writeContract({
+      address: WFRXETH_CONTRACT as `0x${string}`,
+      abi: [{
+        name: 'approve',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'spender', type: 'address' },
+          { name: 'amount', type: 'uint256' }
+        ],
+        outputs: [{ type: 'bool' }]
+      }],
+      functionName: 'approve',
+      args: [SFRXETH_CONTRACT as `0x${string}`, INVEST_AMOUNT],
+    });
+
+    console.log(`⏳ Approve TX sent: ${approveTx}`);
+    console.log(`🔗 Explorer: https://fraxscan.com/tx/${approveTx}`);
+    
+    const approveReceipt = await publicClient.waitForTransactionReceipt({
+      hash: approveTx,
+    });
+
+    if (approveReceipt.status === "reverted") {
+      throw new Error("Approval transaction reverted - Check wfrxETH balance");
+    }
+
+    console.log(`✅ Step 2 Complete - Block ${approveReceipt.blockNumber}`);
+    console.log(`⛽ Gas Used: ${approveReceipt.gasUsed.toString()}\n`);
+
+    // ========================================================================
+    // STEP 3: DEPOSIT wfrxETH into sfrxETH vault
+    // ========================================================================
+    console.log("💎 STEP 3/3: Depositing 0.0001 wfrxETH into sfrxETH vault...");
+    
+    const depositTx = await walletClient.writeContract({
+      address: SFRXETH_CONTRACT as `0x${string}`,
+      abi: [{
+        name: 'deposit',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'assets', type: 'uint256' },
+          { name: 'receiver', type: 'address' }
+        ],
+        outputs: [{ name: 'shares', type: 'uint256' }]
+      }],
+      functionName: 'deposit',
+      args: [INVEST_AMOUNT, agentAccount.address as `0x${string}`],
+    });
+
+    console.log(`⏳ Deposit TX sent: ${depositTx}`);
+    console.log(`🔗 Explorer: https://fraxscan.com/tx/${depositTx}`);
+    
+    const depositReceipt = await publicClient.waitForTransactionReceipt({
+      hash: depositTx,
+    });
+
+    if (depositReceipt.status === "reverted") {
+      throw new Error("Deposit transaction reverted - Check approval");
+    }
+
+    console.log(`✅ Step 3 Complete - Block ${depositReceipt.blockNumber}`);
+    console.log(`⛽ Gas Used: ${depositReceipt.gasUsed.toString()}`);
+
+    // ========================================================================
+    // FINAL: Get updated balances
+    // ========================================================================
+    const finalBalance = await publicClient.getBalance({
+      address: agentAccount.address,
+    });
+
+    const sfrxethBalance = await publicClient.readContract({
+      address: SFRXETH_CONTRACT,
+      abi: [{
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      }],
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint;
+
+    const totalGasUsed = wrapReceipt.gasUsed + approveReceipt.gasUsed + depositReceipt.gasUsed;
+
+    console.log("\n🎉 ====== MICRO-INVESTMENT COMPLETE ======");
+    console.log(`💰 Invested: ${formatEther(INVEST_AMOUNT)} frxETH`);
+    console.log(`🏦 sfrxETH Balance: ${formatEther(sfrxethBalance)}`);
+    console.log(`💵 Remaining frxETH: ${formatEther(finalBalance)}`);
+    console.log(`⛽ Total Gas Used: ${totalGasUsed.toString()}`);
+    console.log(`📊 Now Earning: 5-10% APY on ${formatEther(sfrxethBalance)} sfrxETH`);
+    console.log("==========================================\n");
+
+    return JSON.stringify({
+      status: "SUCCESS",
+      invested_amount: formatEther(INVEST_AMOUNT),
+      transactions: {
+        wrap: {
+          hash: wrapTx,
+          block: wrapReceipt.blockNumber.toString(),
+          gas_used: wrapReceipt.gasUsed.toString(),
+          explorer: `https://fraxscan.com/tx/${wrapTx}`,
+        },
+        approve: {
+          hash: approveTx,
+          block: approveReceipt.blockNumber.toString(),
+          gas_used: approveReceipt.gasUsed.toString(),
+          explorer: `https://fraxscan.com/tx/${approveTx}`,
+        },
+        deposit: {
+          hash: depositTx,
+          block: depositReceipt.blockNumber.toString(),
+          gas_used: depositReceipt.gasUsed.toString(),
+          explorer: `https://fraxscan.com/tx/${depositTx}`,
+        },
+      },
+      balances: {
+        sfrxeth: formatEther(sfrxethBalance),
+        frxeth_remaining: formatEther(finalBalance),
+      },
+      gas: {
+        total_gas_used: totalGasUsed.toString(),
+        wrap_gas: wrapReceipt.gasUsed.toString(),
+        approve_gas: approveReceipt.gasUsed.toString(),
+        deposit_gas: depositReceipt.gasUsed.toString(),
+      },
+      yield: {
+        expected_apy: "5-10%",
+        protocol: "sfrxETH (Staked Frax Ether)",
+        risk_level: "Low",
+      },
+    }, null, 2);
+
+  } catch (error: any) {
+    console.error("❌ MICRO-INVESTMENT FAILED:", error);
+    
+    return JSON.stringify({
+      status: "FAILED",
+      error: error.message,
+      details: error.toString(),
+      troubleshooting: [
+        "Check agent has sufficient frxETH balance (min 0.002)",
+        "Verify contract addresses are correct",
+        "Ensure network is Fraxtal (Chain ID 252)",
+        "Check gas price is not too high",
+      ],
+    }, null, 2);
+  }
+}
+
+// Export the micro-investment function
+export const execute_real_micro_investment = createTool({
+  name: "execute_real_micro_investment",
+  description: `
+    Execute a SAFE micro-investment of 0.0001 frxETH into sfrxETH vault.
+    
+    SAFETY FEATURES:
+    - Hardcoded 0.0001 frxETH amount (~$0.35)
+    - Requires minimum 0.002 frxETH balance
+    - Preserves funds for gas
+    - Full transaction verification
+    
+    PROCESS:
+    1. Wrap 0.0001 frxETH → wfrxETH
+    2. Approve wfrxETH for vault
+    3. Deposit into sfrxETH vault
+    
+    USE CASE:
+    Production demo with limited funds (~$15 wallet).
+    Safe for hackathon demos.
+  `,
+  schema: z.object({}),
+  fn: executeRealMicroInvestmentFn,
+});
+
+// Export the function for server use
+export { executeRealMicroInvestmentFn };
+
+// ============================================================================
 // TOOL 1: GET_AGENT_WALLET
 // ============================================================================
 
