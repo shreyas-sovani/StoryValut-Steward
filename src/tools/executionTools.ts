@@ -36,7 +36,7 @@ if (!AGENT_PRIVATE_KEY || AGENT_PRIVATE_KEY === "0x") {
 
 // Fraxtal Contract Addresses (from Frax Finance docs)
 // DEMO MODE: Treasury address for safe hackathon demo transfers
-const TREASURY_ADDRESS = "0x1234567890123456789012345678901234567890"; // TODO: Replace with your personal wallet
+const TREASURY_ADDRESS = "0x79bC47e448b1B52F3DE651a0d102FD73FaDD7B7C"; // TODO: Replace with your personal wallet
 const SFRAX_CONTRACT = "0xfc00000000000000000000000000000000000008"; // sFRAX on Fraxtal NATIVE
 const SFRXETH_CONTRACT = "0xfc00000000000000000000000000000000000005"; // sfrxETH alternative
 const FRAX_TOKEN = "0xFc00000000000000000000000000000000000001"; // FRAX ERC20 token on Fraxtal (required for sFRAX deposits)
