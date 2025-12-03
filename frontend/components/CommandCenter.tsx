@@ -81,9 +81,38 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
       addLog("🔗 Live stream connected to backend", "success");
     };
 
+    // Listen for 'funding_update' event type (backend sends event: "funding_update")
+    eventSource.addEventListener('funding_update', (event: any) => {
+      console.log("📡 CommandCenter: FUNDING_UPDATE event received:", event.data);
+      console.log("🔥 VERCEL BUILD VERSION: 61704ec");
+      
+      try {
+        const data: FundingUpdate = JSON.parse(event.data);
+        console.log("✅ Parsed funding_update data:", data);
+        
+        // Ignore WAITING status (initial message)
+        if (data.status === "WAITING") {
+          console.log("⏳ Initial WAITING status received");
+          return;
+        }
+        
+        console.log("🚀 Calling handleFundingUpdate with:", data);
+        handleFundingUpdate(data);
+      } catch (err) {
+        console.error("❌ SSE parse error:", err);
+        console.error("❌ Raw event data:", event.data);
+      }
+    });
+
+    // Listen for 'heartbeat' event type
+    eventSource.addEventListener('heartbeat', (event: any) => {
+      console.log("💓 Heartbeat received:", event.data);
+    });
+
+    // Generic onmessage handler for events without explicit type
     eventSource.onmessage = (event) => {
-      console.log("📡 CommandCenter: SSE message received:", event.data);
-      console.log("🔥 VERCEL BUILD VERSION: 051787b");
+      console.log("📡 CommandCenter: Generic SSE message (no event type):", event.data);
+      console.log("🔥 VERCEL BUILD VERSION: 61704ec");
       console.log("📦 Event type:", event.type);
       console.log("📦 Event lastEventId:", event.lastEventId);
       
