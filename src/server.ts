@@ -23,6 +23,8 @@ const sessions = new Map<string, any>();
 // ============================================================================
 let current_yield = 4.5; // Default: Healthy 4.5% APY
 let lastKnownBalance = "0"; // Track FRAX balance
+let isInvesting = false; // Prevent concurrent investments
+let isEvacuating = false; // Prevent concurrent evacuations
 let watcherLogs: Array<{
   timestamp: string;
   type: "info" | "warning" | "critical" | "success";
@@ -390,7 +392,10 @@ async function autonomousWatcherLoop() {
       const fraxBalance = parseFloat(walletData.balances.FRAX);
       
       // Step 2: AUTO-INVEST Rule (0.01 FRAX minimum for testing)
-      if (fraxBalance > 0.01 && fraxBalance !== parseFloat(lastKnownBalance)) {
+      if (fraxBalance > 0.01 && fraxBalance !== parseFloat(lastKnownBalance) && !isInvesting) {
+        isInvesting = true; // Set flag immediately to prevent concurrent investments
+        lastKnownBalance = fraxBalance.toString(); // Update balance BEFORE investing
+        
         addWatcherLog("success", `💰 NEW CAPITAL DETECTED: ${fraxBalance.toFixed(4)} FRAX`);
         
         // Broadcast deposit detected
@@ -403,80 +408,97 @@ async function autonomousWatcherLoop() {
         
         addWatcherLog("info", "🤖 AUTO-INVEST PROTOCOL: Executing conservative_mint strategy...");
         
-        // Execute auto-investment
-        const investResult = await executeStrategyFn({
-          strategy_type: "conservative_mint",
-          amount: (fraxBalance * 0.95).toString(), // Invest 95%, keep 5% for gas
-          reason: "Autonomous auto-invest triggered by new capital detection",
-        });
-        
-        const investData = JSON.parse(investResult);
-        if (investData.status === "EXECUTED") {
-          addWatcherLog("success", `✅ AUTO-INVEST COMPLETE: ${investData.transaction?.hash}`);
-          
-          // Broadcast invested
-          broadcastFundingUpdate({
-            type: "funding_update",
-            status: "INVESTED",
-            amount: (fraxBalance * 0.95).toFixed(2),
-            tx: investData.transaction?.hash,
-            timestamp: new Date().toISOString(),
+        try {
+          // Execute auto-investment
+          const investResult = await executeStrategyFn({
+            strategy_type: "conservative_mint",
+            amount: (fraxBalance * 0.95).toString(), // Invest 95%, keep 5% for gas
+            reason: "Autonomous auto-invest triggered by new capital detection",
           });
-        } else {
-          addWatcherLog("warning", `⚠️ AUTO-INVEST DEMO: Would execute in production`);
           
-          // Broadcast invested (demo)
-          broadcastFundingUpdate({
-            type: "funding_update",
-            status: "INVESTED",
-            amount: (fraxBalance * 0.95).toFixed(2),
-            tx: "DEMO_MODE",
-            timestamp: new Date().toISOString(),
-          });
+          const investData = JSON.parse(investResult);
+          if (investData.status === "EXECUTED") {
+            addWatcherLog("success", `✅ AUTO-INVEST COMPLETE: ${investData.transaction?.hash}`);
+            
+            // Broadcast invested
+            broadcastFundingUpdate({
+              type: "funding_update",
+              status: "INVESTED",
+              amount: (fraxBalance * 0.95).toFixed(2),
+              tx: investData.transaction?.hash,
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            addWatcherLog("warning", `⚠️ AUTO-INVEST DEMO: Would execute in production`);
+            
+            // Broadcast invested (demo)
+            broadcastFundingUpdate({
+              type: "funding_update",
+              status: "INVESTED",
+              amount: (fraxBalance * 0.95).toFixed(2),
+              tx: "DEMO_MODE",
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch (error) {
+          addWatcherLog("critical", `❌ AUTO-INVEST FAILED: ${error}`);
+        } finally {
+          isInvesting = false; // Release flag after investment completes or fails
         }
-        
-        lastKnownBalance = fraxBalance.toString();
       }
       
       // Step 3: PROTECTION Rule (The Crash Response)
-      if (current_yield < 2.0) {
+      if (current_yield < 2.0 && !isEvacuating) {
+        isEvacuating = true; // Set flag to prevent concurrent evacuations
+        
         addWatcherLog("critical", `🚨 CRITICAL YIELD DETECTED: ${current_yield}%`);
         addWatcherLog("critical", "🚨 EMERGENCY PROTOCOL: Evacuating funds to safety...");
         
-        // Execute emergency withdrawal
-        const evacuateResult = await executeStrategyFn({
-          strategy_type: "emergency_withdraw",
-          reason: `Autonomous evacuation triggered by yield crash (${current_yield}%)`,
-        });
-        
-        const evacuateData = JSON.parse(evacuateResult);
-        if (evacuateData.status === "EXECUTED") {
-          addWatcherLog("success", `✅ FUNDS EVACUATED: Holdings secured in FRAX`);
-          
-          // Broadcast evacuation
-          broadcastFundingUpdate({
-            type: "funding_update",
-            status: "EVACUATED",
-            tx: evacuateData.transaction?.hash,
-            timestamp: new Date().toISOString(),
+        try {
+          // Execute emergency withdrawal
+          const evacuateResult = await executeStrategyFn({
+            strategy_type: "emergency_withdraw",
+            reason: `Autonomous evacuation triggered by yield crash (${current_yield}%)`,
           });
-        } else {
-          addWatcherLog("warning", `⚠️ EVACUATION DEMO: Would execute in production`);
           
-          // Broadcast evacuation (demo)
-          broadcastFundingUpdate({
-            type: "funding_update",
-            status: "EVACUATED",
-            tx: "DEMO_MODE",
-            timestamp: new Date().toISOString(),
-          });
+          const evacuateData = JSON.parse(evacuateResult);
+          if (evacuateData.status === "EXECUTED") {
+            addWatcherLog("success", `✅ FUNDS EVACUATED: Holdings secured in FRAX`);
+            
+            // Broadcast evacuation
+            broadcastFundingUpdate({
+              type: "funding_update",
+              status: "EVACUATED",
+              tx: evacuateData.transaction?.hash,
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            addWatcherLog("warning", `⚠️ EVACUATION DEMO: Would execute in production`);
+            
+            // Broadcast evacuation (demo)
+            broadcastFundingUpdate({
+              type: "funding_update",
+              status: "EVACUATED",
+              tx: "DEMO_MODE",
+              timestamp: new Date().toISOString(),
+            });
+          }
+          
+          // Reset yield after evacuation (for demo purposes)
+          setTimeout(() => {
+            current_yield = 4.5;
+            addWatcherLog("info", "✅ Demo reset: Yield restored to 4.5%");
+            isEvacuating = false; // Also reset flag on recovery
+          }, 15000); // Reset after 15 seconds
+          
+        } catch (error) {
+          addWatcherLog("critical", `❌ EVACUATION FAILED: ${error}`);
+        } finally {
+          isEvacuating = false; // Release flag after evacuation completes or fails
         }
-        
-        // Reset yield after evacuation (for demo purposes)
-        setTimeout(() => {
-          current_yield = 4.5;
-          addWatcherLog("info", "✅ Demo reset: Yield restored to 4.5%");
-        }, 15000); // Reset after 15 seconds
+      } else if (current_yield >= 2.0 && isEvacuating) {
+        // Yield recovered while evacuating - reset flag
+        isEvacuating = false;
       }
       
       // Step 4: Regular monitoring log
