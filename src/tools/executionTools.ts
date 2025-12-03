@@ -72,7 +72,13 @@ if (AGENT_PRIVATE_KEY && AGENT_PRIVATE_KEY !== "0x") {
 // ============================================================================
 
 async function getAgentWalletFn() {
+  // DEBUG: Check what's initialized
+  console.log(`🔍 [WALLET CHECK] agentAccount exists: ${!!agentAccount}`);
+  console.log(`🔍 [WALLET CHECK] publicClient exists: ${!!publicClient}`);
+  console.log(`🔍 [WALLET CHECK] agentAccount address: ${agentAccount?.address || "N/A"}`);
+  
   if (!agentAccount || !publicClient) {
+    console.error("❌ [WALLET CHECK] Returning DEMO MODE response");
     return JSON.stringify({
       error: "Agent wallet not initialized - DEMO MODE",
       address: "0xDEMO...ADDRESS",
@@ -84,6 +90,8 @@ async function getAgentWalletFn() {
       note: "Set AGENT_PRIVATE_KEY in .env to enable real execution",
     }, null, 2);
   }
+
+  console.log("✅ [WALLET CHECK] Proceeding with live wallet check...");
 
   try {
     // CRITICAL: On Fraxtal, FRAX is the NATIVE token (like ETH on Ethereum)
