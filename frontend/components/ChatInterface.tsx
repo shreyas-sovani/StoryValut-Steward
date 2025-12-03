@@ -292,10 +292,13 @@ export default function ChatInterface({
     const addressMatch = content.match(/0x[a-fA-F0-9]{40}/);
     
     // Only trigger if we have address AND specific vault deployment keywords
+    // Updated to match actual agent output format
     if (addressMatch && (
       content.toLowerCase().includes("autonomous vault is ready") ||
       content.toLowerCase().includes("your autonomous vault") ||
-      (content.toLowerCase().includes("deposit address") && content.toLowerCase().includes("active_listening"))
+      content.toLowerCase().includes("🏦") || // Vault emoji
+      (content.toLowerCase().includes("deposit") && content.toLowerCase().includes("active_listening")) ||
+      (content.toLowerCase().includes("📍 deposit:") || content.toLowerCase().includes("deposit address:"))
     )) {
       const address = addressMatch[0];
       console.log("Agent vault deployment detected:", address);
@@ -360,12 +363,17 @@ export default function ChatInterface({
 
           // Also check for strategy recommendations with portfolio composition
           // Look for mentions of sFRAX or sfrxETH with risk levels
+          // Trigger EARLY when agent first recommends strategy (before user agrees)
           if (
             (fullResponse.toLowerCase().includes("sfrax") ||
-              fullResponse.toLowerCase().includes("sfrxeth")) &&
+              fullResponse.toLowerCase().includes("sfrxeth") ||
+              fullResponse.toLowerCase().includes("fraxlend")) &&
             (fullResponse.toLowerCase().includes("recommend") ||
               fullResponse.toLowerCase().includes("strategy") ||
-              fullResponse.toLowerCase().includes("vault"))
+              fullResponse.toLowerCase().includes("vault") ||
+              fullResponse.toLowerCase().includes("conservative") ||
+              fullResponse.toLowerCase().includes("aggressive") ||
+              fullResponse.toLowerCase().includes("leverage"))
           ) {
             try {
               // Create a mock vault data for visualization
@@ -373,37 +381,52 @@ export default function ChatInterface({
                 fullResponse.toLowerCase().includes("low risk") ||
                 fullResponse.toLowerCase().includes("risk-averse") ||
                 fullResponse.toLowerCase().includes("conservative") ||
-                fullResponse.toLowerCase().includes("sfrax vault");
+                fullResponse.toLowerCase().includes("sfrax vault") ||
+                fullResponse.toLowerCase().includes("sfrax stable");
 
               const isMediumRisk =
                 fullResponse.toLowerCase().includes("medium risk") ||
                 fullResponse.toLowerCase().includes("sfrxeth vault") ||
                 fullResponse.toLowerCase().includes("balanced");
+              
+              const isHighRisk =
+                fullResponse.toLowerCase().includes("high risk") ||
+                fullResponse.toLowerCase().includes("aggressive") ||
+                fullResponse.toLowerCase().includes("leverage") ||
+                fullResponse.toLowerCase().includes("fraxlend");
 
-              if (isLowRisk || isMediumRisk) {
+              if (isLowRisk || isMediumRisk || isHighRisk) {
                 const mockVaultData = {
                   agent_id: "preview_" + Date.now(),
                   tx_hash: "0x" + "0".repeat(64),
                   atp_strategy_url: "https://app.iqai.com/",
                   deployed_at: new Date().toISOString(),
                   strategy_summary: {
-                    protocol: isLowRisk ? "sFRAX Vault" : "Balanced Strategy",
-                    apr: isLowRisk ? "4.5%" : "3.9-4.5%",
-                    risk_level: isLowRisk ? "Low" : "Medium",
-                    allocation: isLowRisk
-                      ? "100% Stable"
-                      : "40% Stable, 60% Growth",
+                    protocol: isHighRisk 
+                      ? "Fraxlend Leverage Strategy" 
+                      : isLowRisk 
+                        ? "sFRAX Vault" 
+                        : "Balanced Strategy",
+                    apr: isHighRisk ? "8-12%" : isLowRisk ? "5-10%" : "3.9-4.5%",
+                    risk_level: isHighRisk ? "High" : isLowRisk ? "Low" : "Medium",
+                    allocation: isHighRisk
+                      ? "Leveraged sFRAX"
+                      : isLowRisk
+                        ? "100% Stable"
+                        : "40% Stable, 60% Growth",
                   },
-                  portfolio_composition: isLowRisk
-                    ? [{ name: "sFRAX (Stable)", value: 100, color: "#00C49F" }]
-                    : [
-                        { name: "sFRAX (Stable)", value: 40, color: "#00C49F" },
-                        {
-                          name: "sfrxETH (Growth)",
-                          value: 60,
-                          color: "#FFBB28",
-                        },
-                      ],
+                  portfolio_composition: isHighRisk
+                    ? [{ name: "sFRAX (Leveraged)", value: 100, color: "#FF6B6B" }]
+                    : isLowRisk
+                      ? [{ name: "sFRAX (Stable)", value: 100, color: "#00C49F" }]
+                      : [
+                          { name: "sFRAX (Stable)", value: 40, color: "#00C49F" },
+                          {
+                            name: "sfrxETH (Growth)",
+                            value: 60,
+                            color: "#FFBB28",
+                          },
+                        ],
                 };
                 onVaultDeployed?.(mockVaultData);
               }
