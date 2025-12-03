@@ -5,6 +5,7 @@ import { Send, Loader2, Sparkles, Activity } from "lucide-react";
 import { sendChatMessage, type ChatMessage, type SSEEvent } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import OpportunityCard from "@/components/OpportunityCard";
+import CommandCenter from "@/components/CommandCenter";
 
 interface MonitoringData {
   active: boolean;
@@ -65,6 +66,8 @@ export default function ChatInterface({
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [leverageRecommendation, setLeverageRecommendation] = useState<LeverageRecommendation | null>(null);
+  const [showCommandCenter, setShowCommandCenter] = useState(false);
+  const [commandCenterAddress, setCommandCenterAddress] = useState("");
   const [monitoring, setMonitoring] = useState<MonitoringData>({
     active: false,
     asset: "",
@@ -330,16 +333,20 @@ export default function ChatInterface({
     
     if (shouldRedirect) {
       console.log("🎉 VAULT INITIALIZATION DETECTED!");
-      console.log("   Triggering redirect to FundDashboard...");
+      console.log("   Triggering Command Center...");
       
-      // Trigger FundDashboard display
+      // Activate Command Center
+      setShowCommandCenter(true);
+      setCommandCenterAddress(address);
+      
+      // Also trigger FundDashboard display (for parent component)
       window.dispatchEvent(
         new CustomEvent("agentWalletDetected", {
           detail: { address },
         })
       );
       
-      console.log("✅ Redirect event dispatched!");
+      console.log("✅ Command Center activated!");
     } else {
       console.log("   No vault keywords found - not redirecting yet");
       console.log("   Content includes:", {
@@ -507,7 +514,13 @@ export default function ChatInterface({
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-gray-950 via-purple-950/20 to-gray-950">
+    <>
+      {/* Command Center Mode */}
+      {showCommandCenter ? (
+        <CommandCenter walletAddress={commandCenterAddress} />
+      ) : (
+        /* Normal Chat Interface */
+        <div className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-gray-950 via-purple-950/20 to-gray-950">
       {/* Header */}
       <div className="flex-shrink-0 border-b border-purple-500/20 bg-gray-900/50 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-6 py-4">
@@ -752,7 +765,9 @@ export default function ChatInterface({
           )}
         </div>
       </div>
-    </div>
+      </div>
+      )}
+    </>
   );
 }
 
