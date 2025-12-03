@@ -147,12 +147,16 @@ async function getAgentWalletFn() {
       },
     };
 
+    console.log(`✅ [WALLET CHECK] Returning walletInfo with execution_capable: true`);
     return JSON.stringify(walletInfo, null, 2);
   } catch (error: any) {
+    console.error(`❌ [WALLET CHECK] Error fetching balances:`, error);
+    console.error(`❌ [WALLET CHECK] Returning error response without execution_capable`);
     return JSON.stringify({
       error: "Failed to fetch wallet balances",
       details: error.message,
       address: agentAccount.address,
+      execution_capable: false, // CRITICAL: Add this so server knows it's an error!
     }, null, 2);
   }
 }
