@@ -56,6 +56,9 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
     const streamUrl = `${apiUrl}/api/funding/stream`;
     
     console.log("🔌 CommandCenter: Connecting to SSE stream:", streamUrl);
+    console.log("📊 CommandCenter: API URL env var:", process.env.NEXT_PUBLIC_API_URL);
+    console.log("🌍 CommandCenter: NODE_ENV:", process.env.NODE_ENV);
+    
     const eventSource = new EventSource(streamUrl);
 
     eventSource.onopen = () => {
@@ -74,7 +77,9 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
     };
 
     eventSource.onerror = (err) => {
-      console.error("SSE connection error:", err);
+      console.error("❌ SSE connection error:", err);
+      console.error("❌ EventSource readyState:", eventSource.readyState);
+      console.error("❌ Attempted URL:", streamUrl);
       addLog("⚠️ Connection interrupted, reconnecting...", "warning");
     };
 

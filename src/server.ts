@@ -81,7 +81,8 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
   /https:\/\/.*\.vercel\.app$/,  // Any Vercel deployment
-  "https://story-valut-steward.vercel.app",  // Your production domain
+  "https://story-vault-steward.vercel.app",  // Main production domain (CORRECTED SPELLING)
+  "https://story-valut-steward.vercel.app",  // Old domain (typo in URL)
   "https://story-valut-steward-snmf.vercel.app",  // Current Vercel deployment
 ];
 
