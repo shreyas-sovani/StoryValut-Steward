@@ -33,12 +33,9 @@ export default function FundDashboard({
   const [copied, setCopied] = useState(false);
   const [fundingStatus, setFundingStatus] = useState<"WAITING" | "DEPOSIT_DETECTED" | "INVESTED" | "EVACUATED">("WAITING");
   const [lastTx, setLastTx] = useState<string | null>(null);
-  const logsEndRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll logs
-  useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
+  const [totalDeposits, setTotalDeposits] = useState(0);
+  const [totalWithdrawals, setTotalWithdrawals] = useState(0);
+  const [scanCount, setScanCount] = useState(0);
 
   // SSE for real-time funding updates
   useEffect(() => {
@@ -56,6 +53,14 @@ export default function FundDashboard({
       }
       if (data.amount) {
         setBalance(data.amount);
+      }
+      
+      // Track metrics
+      if (data.status === "DEPOSIT_DETECTED") {
+        setTotalDeposits(prev => prev + 1);
+      }
+      if (data.status === "EVACUATED") {
+        setTotalWithdrawals(prev => prev + 1);
       }
     });
 
@@ -80,6 +85,7 @@ export default function FundDashboard({
           setBalance(data.last_known_balance || "0");
           if (data.recent_logs) {
             setLogs(data.recent_logs);
+            setScanCount(prev => prev + 1); // Increment on each status fetch
           }
         }
       } catch (error) {
@@ -411,28 +417,74 @@ export default function FundDashboard({
         </div>
       </div>
 
-      {/* Live Terminal Logs */}
+      {/* Performance Metrics */}
       <div className="max-w-7xl mx-auto">
-        <div className="bg-black border-2 border-green-500 rounded-lg overflow-hidden">
-          {/* Terminal Header */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Total Scans */}
+          <div className="bg-gray-900 border-2 border-green-500/50 rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Activity className="w-5 h-5 text-green-400" />
+              <div className="text-xs text-green-600">TOTAL SCANS</div>
+            </div>
+            <div className="text-3xl font-bold text-green-400">{scanCount}</div>
+            <div className="text-xs text-green-600 mt-1">Every 5 seconds</div>
+          </div>
+
+          {/* Deposits */}
+          <div className="bg-gray-900 border-2 border-blue-500/50 rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <DollarSign className="w-5 h-5 text-blue-400" />
+              <div className="text-xs text-blue-600">DEPOSITS DETECTED</div>
+            </div>
+            <div className="text-3xl font-bold text-blue-400">{totalDeposits}</div>
+            <div className="text-xs text-blue-600 mt-1">Auto-invested</div>
+          </div>
+
+          {/* Withdrawals */}
+          <div className="bg-gray-900 border-2 border-red-500/50 rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+              <div className="text-xs text-red-600">EMERGENCY EXITS</div>
+            </div>
+            <div className="text-3xl font-bold text-red-400">{totalWithdrawals}</div>
+            <div className="text-xs text-red-600 mt-1">Crisis evacuations</div>
+          </div>
+
+          {/* Current Yield */}
+          <div className="bg-gray-900 border-2 border-yellow-500/50 rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Zap className="w-5 h-5 text-yellow-400" />
+              <div className="text-xs text-yellow-600">CURRENT YIELD</div>
+            </div>
+            <div className="text-3xl font-bold text-yellow-400">{yield_rate.toFixed(2)}%</div>
+            <div className={cn(
+              "text-xs mt-1",
+              yield_rate >= 3.5 ? "text-green-400" : yield_rate >= 2.0 ? "text-yellow-400" : "text-red-400"
+            )}>
+              {yield_rate >= 3.5 ? "✓ Healthy" : yield_rate >= 2.0 ? "⚠ Warning" : "🚨 Critical"}
+            </div>
+          </div>
+        </div>
+
+        {/* Live Activity Feed */}
+        <div className="mt-6 bg-gray-900 border-2 border-green-500 rounded-lg overflow-hidden">
           <div className="bg-green-500 text-black px-4 py-2 flex items-center gap-3">
             <Activity className="w-5 h-5" />
-            <span className="font-bold">AUTONOMOUS WATCHER LOG STREAM</span>
+            <span className="font-bold">LIVE ACTIVITY FEED</span>
             <div className="ml-auto flex items-center gap-2 text-xs">
               <div className="w-2 h-2 rounded-full bg-black animate-pulse" />
               <span>LIVE</span>
             </div>
           </div>
 
-          {/* Terminal Body */}
-          <div className="p-4 h-96 overflow-y-auto bg-black">
+          <div className="p-4 h-64 overflow-y-auto bg-black">
             {logs.length === 0 ? (
               <div className="text-green-600 text-sm">
-                <div className="animate-pulse">Initializing watcher...</div>
+                <div className="animate-pulse">Initializing autonomous watcher...</div>
               </div>
             ) : (
               <div className="space-y-1 text-sm">
-                {logs.map((log, index) => (
+                {logs.slice(-20).map((log, index) => (
                   <div
                     key={index}
                     className={cn(
@@ -455,15 +507,13 @@ export default function FundDashboard({
                     </span>
                   </div>
                 ))}
-                <div ref={logsEndRef} />
               </div>
             )}
           </div>
 
-          {/* Terminal Footer */}
           <div className="bg-gray-900 px-4 py-2 border-t border-green-500 text-xs text-green-600 flex items-center justify-between">
             <span>Scan Interval: 5s | Protection Armed | Auto-Invest Active</span>
-            <span>{logs.length} events logged</span>
+            <span>Last {Math.min(logs.length, 20)} events</span>
           </div>
         </div>
 
