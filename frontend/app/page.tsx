@@ -52,6 +52,7 @@ export default function Home() {
         /* Full Screen Fund Dashboard */
         <FundDashboard
           agentAddress={agentWalletAddress || "Loading..."}
+          sessionId={sessionId}
           onSimulateCrash={() => {
             console.log("Crash simulated from dashboard");
           }}

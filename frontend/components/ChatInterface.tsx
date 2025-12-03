@@ -290,14 +290,15 @@ export default function ChatInterface({
   const detectAgentWallet = (content: string) => {
     // Look for agent wallet address pattern (0x followed by 40 hex characters)
     const addressMatch = content.match(/0x[a-fA-F0-9]{40}/);
+    
+    // Only trigger if we have address AND specific vault deployment keywords
     if (addressMatch && (
-      content.toLowerCase().includes("deposit") ||
-      content.toLowerCase().includes("send frax") ||
-      content.toLowerCase().includes("agent") ||
-      content.toLowerCase().includes("autonomous wallet")
+      content.toLowerCase().includes("autonomous vault is ready") ||
+      content.toLowerCase().includes("your autonomous vault") ||
+      (content.toLowerCase().includes("deposit address") && content.toLowerCase().includes("active_listening"))
     )) {
       const address = addressMatch[0];
-      console.log("Agent wallet detected:", address);
+      console.log("Agent vault deployment detected:", address);
       
       // Trigger FundDashboard display
       window.dispatchEvent(

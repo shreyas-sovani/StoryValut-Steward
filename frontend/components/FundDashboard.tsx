@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Flame, Wallet, Activity, AlertTriangle, CheckCircle, Info, Copy, QrCode, DollarSign, Zap } from "lucide-react";
+import { Flame, Wallet, Activity, AlertTriangle, CheckCircle, Info, Copy, QrCode, DollarSign, Zap, MessageCircle, Send, X, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { sendChatMessage, type ChatMessage } from "@/lib/api";
 
 interface WatcherLog {
   timestamp: string;
@@ -21,11 +22,13 @@ interface FundingUpdate {
 interface FundDashboardProps {
   agentAddress?: string;
   onSimulateCrash?: () => void;
+  sessionId?: string;
 }
 
 export default function FundDashboard({
   agentAddress = "0xDEMO...ADDRESS",
   onSimulateCrash,
+  sessionId = "fund-dashboard-session",
 }: FundDashboardProps) {
   const [logs, setLogs] = useState<WatcherLog[]>([]);
   const [balance, setBalance] = useState("0");
@@ -36,6 +39,14 @@ export default function FundDashboard({
   const [totalDeposits, setTotalDeposits] = useState(0);
   const [totalWithdrawals, setTotalWithdrawals] = useState(0);
   const [scanCount, setScanCount] = useState(0);
+  
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMinimized, setChatMinimized] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // SSE for real-time funding updates
   useEffect(() => {
@@ -120,6 +131,77 @@ export default function FundDashboard({
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const handleChatSend = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: chatInput.trim(),
+      timestamp: new Date().toISOString(),
+    };
+
+    setChatMessages((prev) => [...prev, userMessage]);
+    setChatInput("");
+    setChatLoading(true);
+
+    let fullResponse = "";
+
+    await sendChatMessage(
+      userMessage.content,
+      sessionId,
+      (chunk) => {
+        if (chunk.type === "content" && chunk.content) {
+          fullResponse += chunk.content;
+          // Update the last message or create a new streaming message
+          setChatMessages((prev) => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg?.role === "assistant" && !lastMsg.timestamp.includes("T")) {
+              // Update streaming message (temporary timestamp)
+              return [...prev.slice(0, -1), { ...lastMsg, content: fullResponse }];
+            } else {
+              // Create new streaming message with temp timestamp
+              return [...prev, { role: "assistant", content: fullResponse, timestamp: "streaming" }];
+            }
+          });
+        }
+      },
+      () => {
+        // onComplete
+        setChatMessages((prev) => {
+          const lastMsg = prev[prev.length - 1];
+          if (lastMsg?.role === "assistant") {
+            return [
+              ...prev.slice(0, -1),
+              { ...lastMsg, content: fullResponse, timestamp: new Date().toISOString() },
+            ];
+          }
+          return prev;
+        });
+        setChatLoading(false);
+      },
+      (error) => {
+        // onError
+        console.error("Chat error:", error);
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "Sorry, I encountered an error. Please try again.",
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+        setChatLoading(false);
+      }
+    );
+  };
+
+  // Auto-scroll chat
+  useEffect(() => {
+    if (chatOpen && chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages, chatOpen]);
 
   const healthStatus = yield_rate >= 3.5 ? "healthy" : yield_rate >= 2.0 ? "warning" : "critical";
 
@@ -527,6 +609,114 @@ export default function FundDashboard({
           </div>
         </div>
       </div>
+
+      {/* Floating Chat Interface */}
+      {!chatOpen && (
+        <button
+          onClick={() => setChatOpen(true)}
+          className="fixed bottom-6 right-6 bg-green-500 hover:bg-green-600 text-black p-4 rounded-full shadow-lg transition-all hover:scale-110 z-50"
+          aria-label="Open chat"
+        >
+          <MessageCircle className="w-6 h-6" />
+        </button>
+      )}
+
+      {chatOpen && (
+        <div
+          className={cn(
+            "fixed bottom-6 right-6 bg-gray-900 border-2 border-green-500 rounded-lg shadow-2xl z-50 flex flex-col transition-all",
+            chatMinimized ? "w-80 h-14" : "w-96 h-[500px]"
+          )}
+        >
+          {/* Chat Header */}
+          <div className="bg-green-500 text-black px-4 py-3 flex items-center justify-between rounded-t-lg">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5" />
+              <span className="font-bold">Chat with Agent</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setChatMinimized(!chatMinimized)}
+                className="hover:bg-black/20 p-1 rounded transition-colors"
+              >
+                <Minimize2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setChatOpen(false)}
+                className="hover:bg-black/20 p-1 rounded transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {!chatMinimized && (
+            <>
+              {/* Chat Messages */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-black">
+                {chatMessages.length === 0 && (
+                  <div className="text-green-600 text-sm text-center py-8">
+                    <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>Ask me anything about your vault!</p>
+                    <p className="text-xs mt-1">e.g., "Withdraw my funds" or "Check my balance"</p>
+                  </div>
+                )}
+                {chatMessages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={cn(
+                      "flex",
+                      msg.role === "user" ? "justify-end" : "justify-start"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "max-w-[80%] rounded-lg px-3 py-2 text-sm",
+                        msg.role === "user"
+                          ? "bg-green-500 text-black"
+                          : "bg-gray-800 text-green-400 border border-green-500/30"
+                      )}
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Chat Input */}
+              <div className="border-t border-green-500 p-3 bg-gray-900">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleChatSend();
+                      }
+                    }}
+                    placeholder="Type a message..."
+                    disabled={chatLoading}
+                    className="flex-1 bg-black border border-green-500/30 rounded px-3 py-2 text-sm text-green-400 placeholder-green-600/50 focus:outline-none focus:border-green-500"
+                  />
+                  <button
+                    onClick={handleChatSend}
+                    disabled={chatLoading || !chatInput.trim()}
+                    className={cn(
+                      "bg-green-500 hover:bg-green-600 text-black p-2 rounded transition-colors",
+                      (chatLoading || !chatInput.trim()) && "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
