@@ -295,57 +295,16 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
     if (strategy_type === "conservative_mint") {
       console.log(`📤 Depositing ${formatEther(executeAmount)} FRAX into sFRAX vault...`);
 
-      // On Fraxtal, FRAX is native but sFRAX accepts FRAX ERC20 token
-      // Process: Native FRAX → Wrap to FRAX ERC20 → Approve → Deposit into sFRAX
+      // On Fraxtal, sFRAX accepts native FRAX directly via payable deposit
+      // This is a native Fraxtal precompile - no wrapping needed!
       
-      // Step 1: Wrap native FRAX to FRAX ERC20 token (like wrapping ETH to WETH)
-      console.log(`📝 Step 1/3: Wrapping native FRAX to FRAX ERC20...`);
-      const wrapTx = await walletClient.sendTransaction({
-        to: FRAX_TOKEN,
-        value: executeAmount,  // Send native FRAX, get FRAX ERC20 back
-        data: '0xd0e30db0',  // deposit() function signature
-      });
+      console.log(`📝 Depositing native FRAX directly into sFRAX vault...`);
       
-      await publicClient.waitForTransactionReceipt({ hash: wrapTx });
-      console.log(`✅ Wrapped ${formatEther(executeAmount)} native FRAX → FRAX ERC20. TX: ${wrapTx}`);
-      
-      // Step 2: Approve sFRAX to spend FRAX ERC20
-      console.log(`📝 Step 2/3: Approving FRAX token spending...`);
-      const approveTx = await walletClient.writeContract({
-        address: FRAX_TOKEN,
-        abi: [{
-          name: 'approve',
-          type: 'function',
-          stateMutability: 'nonpayable',
-          inputs: [
-            { name: 'spender', type: 'address' },
-            { name: 'amount', type: 'uint256' }
-          ],
-          outputs: [{ type: 'bool' }]
-        }],
-        functionName: 'approve',
-        args: [SFRAX_CONTRACT, executeAmount],
-      });
-      
-      await publicClient.waitForTransactionReceipt({ hash: approveTx });
-      console.log(`✅ FRAX token approved! TX: ${approveTx}`);
-      
-      // Step 3: Deposit FRAX into sFRAX vault (ERC4626)
-      console.log(`📝 Step 3/3: Depositing FRAX into sFRAX vault...`);
-      const depositTx = await walletClient.writeContract({
-        address: SFRAX_CONTRACT,
-        abi: [{
-          name: 'deposit',
-          type: 'function',
-          stateMutability: 'nonpayable',
-          inputs: [
-            { name: 'assets', type: 'uint256' },
-            { name: 'receiver', type: 'address' }
-          ],
-          outputs: [{ name: 'shares', type: 'uint256' }]
-        }],
-        functionName: 'deposit',
-        args: [executeAmount, agentAccount.address],
+      // Deposit native FRAX directly into sFRAX vault
+      const depositTx = await walletClient.sendTransaction({
+        to: SFRAX_CONTRACT,
+        value: executeAmount,  // Send native FRAX
+        data: '0xd0e30db0',  // deposit() function signature for payable deposit
       });
 
       // Wait for confirmation
@@ -355,7 +314,7 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
         hash: depositTx,
       });
 
-      console.log(`✅ All steps complete! Final TX: ${depositTx}`);
+      console.log(`✅ Deposited into sFRAX vault! TX: ${depositTx}`);
 
       return JSON.stringify({
         status: "EXECUTED",
