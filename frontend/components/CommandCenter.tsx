@@ -70,6 +70,13 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
       console.log("📡 CommandCenter: SSE message received:", event.data);
       try {
         const data: FundingUpdate = JSON.parse(event.data);
+        
+        // Ignore heartbeat messages
+        if (data.type === "heartbeat") {
+          console.log("💓 Heartbeat received");
+          return;
+        }
+        
         handleFundingUpdate(data);
       } catch (err) {
         console.error("SSE parse error:", err);

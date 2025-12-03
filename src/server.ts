@@ -355,15 +355,17 @@ app.get("/api/funding/stream", (c) => {
       event: "funding_update",
     });
     
-    // Keep connection alive
+    // Keep connection alive with heartbeats
     const keepAlive = setInterval(async () => {
       try {
         await stream.writeSSE({
           data: JSON.stringify({ type: "heartbeat" }),
           event: "heartbeat",
         });
+        console.log(`💓 Heartbeat sent to client ${clientId}`);
       } catch (error) {
         console.error(`Failed to send heartbeat to client ${clientId}`);
+        clearInterval(keepAlive);
       }
     }, 30000); // Every 30 seconds
     
@@ -376,6 +378,9 @@ app.get("/api/funding/stream", (c) => {
       }
       console.log(`📡 Client ${clientId} disconnected from funding stream (${sseClients.length} remaining)`);
     });
+    
+    // Keep the stream open indefinitely - don't return/exit
+    await stream.sleep(Number.MAX_SAFE_INTEGER);
   });
 });
 
