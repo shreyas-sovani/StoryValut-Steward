@@ -37,6 +37,19 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
+  // God Mode - Simulate Crash
+  const simulateCrash = () => {
+    addLog("🚨 YIELD ALERT: APY DROPPED TO 1.8% | THRESHOLD BREACH", "warning");
+    
+    setTimeout(() => {
+      addLog("⚡ AUTO-EVACUATION PROTOCOL INITIATED | WITHDRAWING CAPITAL", "warning");
+    }, 1000);
+
+    setTimeout(() => {
+      addLog("✅ CAPITAL SECURED | AWAITING REDEPLOYMENT SIGNAL", "success");
+    }, 2500);
+  };
+
   // Connect to SSE stream
   useEffect(() => {
     const eventSource = new EventSource(`/api/funding-stream`);
@@ -145,25 +158,25 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
   };
 
   return (
-    <div className="h-full bg-black text-green-500 font-mono overflow-hidden">
+    <div className="h-full bg-[#050505] text-green-500 font-mono overflow-hidden">
       {/* Header */}
       <motion.div
-        className="border-b border-green-500/30 p-4 bg-black/50 backdrop-blur"
+        className="border-b border-green-500/30 p-4 bg-black/80 backdrop-blur shadow-lg shadow-green-500/10"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <motion.div
-              className="w-3 h-3 bg-green-500 rounded-full"
-              animate={{ opacity: [1, 0.3, 1] }}
+              className="w-3 h-3 bg-green-400 rounded-full shadow-lg shadow-green-400/50"
+              animate={{ opacity: [1, 0.3, 1], scale: [1, 1.2, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
             />
-            <h1 className="text-xl font-bold tracking-wider">
-              AUTONOMOUS STEWARDSHIP: ACTIVE
+            <h1 className="text-xl font-bold tracking-wider text-green-400">
+              AUTONOMOUS STEWARDSHIP: <span className="text-emerald-300">ACTIVE</span>
             </h1>
           </div>
-          <div className="text-sm text-green-400/70">
+          <div className="text-sm text-green-400/70 font-mono">
             Block #{blockNumber.toLocaleString()}
           </div>
         </div>
@@ -174,56 +187,56 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
         <div className="lg:col-span-2 space-y-4">
           {/* Assets Under Management */}
           <motion.div
-            className="border border-green-500/30 rounded-lg p-6 bg-green-950/10"
+            className="border border-green-500/40 rounded-lg p-6 bg-gradient-to-br from-green-950/30 to-black shadow-xl shadow-green-500/10"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
           >
-            <div className="text-sm text-green-400/70 mb-2">ASSETS UNDER MANAGEMENT</div>
+            <div className="text-sm text-green-400/70 mb-2 tracking-widest">ASSETS UNDER MANAGEMENT</div>
             <motion.div
-              className="text-5xl font-bold text-green-400"
+              className="text-6xl font-bold text-green-400"
               key={aum}
               initial={{ scale: 1.1, color: "#34d399" }}
               animate={{ scale: 1, color: "#4ade80" }}
             >
               ${aum.toFixed(4)}
             </motion.div>
-            <div className="text-sm text-green-400/50 mt-2">FRAX Stablecoin</div>
+            <div className="text-sm text-green-400/50 mt-2 font-mono">FRAX Stablecoin</div>
           </motion.div>
 
           {/* Status Grid */}
           <div className="grid grid-cols-2 gap-4">
             <motion.div
-              className="border border-green-500/30 rounded-lg p-4 bg-green-950/10"
+              className="border border-green-500/40 rounded-lg p-4 bg-gradient-to-br from-green-950/30 to-black shadow-lg shadow-green-500/5"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
             >
-              <div className="text-xs text-green-400/70 mb-2">WALLET CONNECTION</div>
+              <div className="text-xs text-green-400/70 mb-2 tracking-widest">WALLET CONNECTION</div>
               <div className="text-lg font-bold text-green-400">⚡ SECURED</div>
-              <div className="text-xs text-green-400/50 mt-1 truncate">
+              <div className="text-xs text-green-400/50 mt-1 truncate font-mono">
                 {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
               </div>
             </motion.div>
 
             <motion.div
-              className="border border-green-500/30 rounded-lg p-4 bg-green-950/10"
+              className="border border-green-500/40 rounded-lg p-4 bg-gradient-to-br from-green-950/30 to-black shadow-lg shadow-green-500/5"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4 }}
             >
-              <div className="text-xs text-green-400/70 mb-2">ACTIVE STRATEGY</div>
+              <div className="text-xs text-green-400/70 mb-2 tracking-widest">ACTIVE STRATEGY</div>
               <div className="text-lg font-bold text-green-400">🔒 sFRAX YIELD</div>
               <div className="text-xs text-green-400/50 mt-1">Conservative Vault</div>
             </motion.div>
 
             <motion.div
-              className="border border-green-500/30 rounded-lg p-4 bg-green-950/10"
+              className="border border-green-500/40 rounded-lg p-4 bg-gradient-to-br from-green-950/30 to-black shadow-lg shadow-green-500/5"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.5 }}
             >
-              <div className="text-xs text-green-400/70 mb-2">YIELD HEARTBEAT</div>
+              <div className="text-xs text-green-400/70 mb-2 tracking-widest">YIELD HEARTBEAT</div>
               <motion.div
                 className="text-lg font-bold text-green-400"
                 animate={{ scale: [1, 1.05, 1] }}
@@ -236,16 +249,16 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
 
             <motion.div
               className={clsx(
-                "border rounded-lg p-4",
+                "border rounded-lg p-4 shadow-lg",
                 isInvesting
-                  ? "border-purple-500/50 bg-purple-950/20"
-                  : "border-green-500/30 bg-green-950/10"
+                  ? "border-purple-500/50 bg-gradient-to-br from-purple-950/30 to-black shadow-purple-500/10"
+                  : "border-green-500/40 bg-gradient-to-br from-green-950/30 to-black shadow-green-500/5"
               )}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.6 }}
             >
-              <div className="text-xs text-green-400/70 mb-2">EXECUTION STATUS</div>
+              <div className="text-xs text-green-400/70 mb-2 tracking-widest">EXECUTION STATUS</div>
               <AnimatePresence mode="wait">
                 {isInvesting ? (
                   <motion.div
@@ -272,17 +285,30 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
               <div className="text-xs text-green-400/50 mt-1">Autonomous Agent</div>
             </motion.div>
           </div>
+
+          {/* God Mode Button */}
+          <motion.button
+            onClick={simulateCrash}
+            className="w-full mt-4 border border-red-500/50 bg-red-950/20 hover:bg-red-950/40 rounded-lg p-4 text-red-400 font-bold tracking-wider transition-all duration-300 hover:scale-105"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            🔥 SIMULATE CRASH (GOD MODE)
+          </motion.button>
         </div>
 
         {/* Live Feed (Matrix Style) */}
         <motion.div
-          className="border border-green-500/30 rounded-lg bg-black overflow-hidden flex flex-col"
+          className="border border-green-500/40 rounded-lg bg-[#0a0a0a] overflow-hidden flex flex-col shadow-2xl shadow-green-500/20"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.7 }}
         >
-          <div className="border-b border-green-500/30 p-3 bg-green-950/20">
-            <div className="text-sm font-bold">SYSTEM LOGS</div>
+          <div className="border-b border-green-500/30 p-3 bg-green-950/30">
+            <div className="text-sm font-bold tracking-wider text-green-400">⚡ SYSTEM LOGS</div>
           </div>
           
           <div className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-thin scrollbar-thumb-green-500/30 scrollbar-track-transparent">
@@ -294,7 +320,7 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.3 }}
-                  className={clsx("text-xs leading-relaxed", getLogColor(log.type))}
+                  className={clsx("text-xs leading-relaxed font-mono", getLogColor(log.type))}
                 >
                   <span className="text-green-400/50">
                     [{new Date(log.timestamp).toLocaleTimeString()}]
@@ -310,12 +336,12 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
 
       {/* Footer */}
       <motion.div
-        className="border-t border-green-500/30 p-3 bg-black/50 backdrop-blur text-center text-xs text-green-400/50"
+        className="border-t border-green-500/30 p-3 bg-black/80 backdrop-blur text-center text-xs text-green-400/50 shadow-lg shadow-green-500/10"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1 }}
       >
-        StoryVault Steward v1.0 • Fraxtal Network (Chain 252) • Secured by Autonomous AI
+        StoryVault Steward v8.0 • Fraxtal Network (Chain 252) • Secured by Autonomous AI
       </motion.div>
     </div>
   );
