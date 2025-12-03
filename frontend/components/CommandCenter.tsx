@@ -52,9 +52,19 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
 
   // Connect to SSE stream
   useEffect(() => {
-    const eventSource = new EventSource(`/api/funding-stream`);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+    const streamUrl = `${apiUrl}/api/funding/stream`;
+    
+    console.log("🔌 CommandCenter: Connecting to SSE stream:", streamUrl);
+    const eventSource = new EventSource(streamUrl);
+
+    eventSource.onopen = () => {
+      console.log("✅ CommandCenter: SSE connection established");
+      addLog("🔗 Live stream connected to backend", "success");
+    };
 
     eventSource.onmessage = (event) => {
+      console.log("📡 CommandCenter: SSE message received:", event.data);
       try {
         const data: FundingUpdate = JSON.parse(event.data);
         handleFundingUpdate(data);
@@ -66,10 +76,12 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
     eventSource.onerror = (err) => {
       console.error("SSE connection error:", err);
       addLog("⚠️ Connection interrupted, reconnecting...", "warning");
-      eventSource.close();
     };
 
-    return () => eventSource.close();
+    return () => {
+      console.log("🔌 CommandCenter: Closing SSE connection");
+      eventSource.close();
+    };
   }, []);
 
   // Simulated block scanning
@@ -85,19 +97,23 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
   }, [blockNumber]);
 
   const handleFundingUpdate = (data: FundingUpdate) => {
+    console.log("🎯 CommandCenter: Processing funding update:", data);
     const timestamp = new Date(data.timestamp).toLocaleTimeString();
 
     switch (data.status) {
       case "DEPOSIT_DETECTED":
+        console.log("💰 CommandCenter: DEPOSIT_DETECTED event", data.amount);
         addLog(`💰 NEW DEPOSIT DETECTED: ${data.amount} FRAX`, "deposit");
         addLog(`📊 Current Balance: ${data.amount} FRAX`, "info");
         
         // Animate AUM counter
         const depositAmount = parseFloat(data.amount || "0");
+        console.log("📈 CommandCenter: Animating counter to", depositAmount);
         animateCounter(depositAmount);
         break;
 
       case "INVESTED":
+        console.log("🚀 CommandCenter: INVESTED event", data);
         setIsInvesting(true);
         addLog(`🚀 AUTO-INVEST INITIATED: ${data.amount} FRAX`, "invest");
         addLog(`📝 Strategy: sFRAX Yield Vault`, "info");
@@ -111,6 +127,9 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
           setIsInvesting(false);
         }, 2000);
         break;
+      
+      default:
+        console.log("⚠️ CommandCenter: Unknown status:", data.status);
     }
   };
 
