@@ -291,14 +291,20 @@ export default function ChatInterface({
     // Look for agent wallet address pattern (0x followed by 40 hex characters)
     const addressMatch = content.match(/0x[a-fA-F0-9]{40}/);
     
-    // Only trigger if we have address AND specific vault deployment keywords
-    // Updated to match actual agent output format
+    // More flexible detection - trigger if we have address AND any vault-related keywords
+    // This catches multiple output formats from the agent
+    const lowerContent = content.toLowerCase();
     if (addressMatch && (
-      content.toLowerCase().includes("autonomous vault is ready") ||
-      content.toLowerCase().includes("your autonomous vault") ||
-      content.toLowerCase().includes("🏦") || // Vault emoji
-      (content.toLowerCase().includes("deposit") && content.toLowerCase().includes("active_listening")) ||
-      (content.toLowerCase().includes("📍 deposit:") || content.toLowerCase().includes("deposit address:"))
+      lowerContent.includes("autonomous vault") ||
+      lowerContent.includes("your vault") ||
+      lowerContent.includes("🏦") || // Vault emoji
+      lowerContent.includes("active_listening") || // JSON status field
+      lowerContent.includes("active listening") || // Formatted output
+      (lowerContent.includes("deposit") && lowerContent.includes("0x")) || // Any deposit instruction with address
+      lowerContent.includes("send your frax") ||
+      lowerContent.includes("i detect your deposit") ||
+      lowerContent.includes("i automatically invest") ||
+      lowerContent.includes("📍") // Location pin emoji often used for addresses
     )) {
       const address = addressMatch[0];
       console.log("Agent vault deployment detected:", address);

@@ -180,13 +180,13 @@ Remember: Behind every wallet is a human with dreams. Treat their money like you
 ✅ Status: ACTIVE_LISTENING
 
 🤖 What happens next:
-1. Send FRAX to address above
-2. I detect deposit in 5 seconds
-3. Auto-invest into [strategy name]
-4. Monitor yields 24/7
-5. Auto-evacuate if yields crash <2%
+1. Send your FRAX to the address above
+2. I detect your deposit within 5 seconds
+3. I automatically invest into [strategy name]
+4. I monitor yields 24/7
+5. I auto-evacuate if yields crash below 2%
 
-Current Holdings: [paste actual balance] FRAX
+Current Holdings: [paste actual balance] FRAX (waiting for your deposit)
 
 Simply send your FRAX and I'll handle everything!
 
