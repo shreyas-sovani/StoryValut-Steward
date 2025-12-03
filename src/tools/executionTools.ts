@@ -68,14 +68,33 @@ async function getAgentWalletFn() {
   }
 
   try {
-    // Get native FRAX balance (gas token on Fraxtal)
-    const fraxBalance = await publicClient.getBalance({
-      address: agentAccount.address,
-    });
+    // Get FRAX ERC20 balance (NOT native gas token - that's frxETH!)
+    const fraxBalance = await publicClient.readContract({
+      address: FRAX_TOKEN,
+      abi: [{
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      }],
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint;
 
-    // Get sFRAX balance (ERC20 - would need balanceOf call)
-    // For demo, we'll simulate this
-    const sfraxBalance = 0n; // TODO: Implement actual ERC20 balanceOf call
+    // Get sFRAX balance (ERC4626 vault shares)
+    const sfraxBalance = await publicClient.readContract({
+      address: SFRAX_CONTRACT,
+      abi: [{
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      }],
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint;
 
     const walletInfo = {
       address: agentAccount.address,
@@ -220,14 +239,24 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
     console.log(`📝 Reason: ${reason}`);
     console.log(`💰 Amount: ${amount || "ALL AVAILABLE"}`);
 
-    // Get current balance
-    const balance = await publicClient.getBalance({
-      address: agentAccount.address,
-    });
+    // Get FRAX token balance (NOT native frxETH balance!)
+    // FRAX on Fraxtal is an ERC20 at 0xFc...0001, gas token is frxETH
+    const fraxBalance = await publicClient.readContract({
+      address: FRAX_TOKEN,
+      abi: [{
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      }],
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint;
 
     const executeAmount = amount 
       ? parseEther(amount)
-      : balance - parseEther("0.01"); // Leave dust for gas
+      : (fraxBalance * 95n) / 100n; // Use 95% of FRAX balance (keep 5% buffer)
 
     if (executeAmount <= 0n) {
       return JSON.stringify({
@@ -235,9 +264,12 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
         strategy: strategy_type,
         reason,
         error: "No FRAX available to execute strategy",
-        current_balance: formatEther(balance),
+        current_frax_balance: formatEther(fraxBalance),
       }, null, 2);
     }
+
+    console.log(`💰 FRAX Balance: ${formatEther(fraxBalance)}`);
+    console.log(`💰 Executing with: ${formatEther(executeAmount)} FRAX`);
 
     // ======================================================================
     // STRATEGY: CONSERVATIVE MINT (sFRAX)
@@ -393,19 +425,33 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
       // 2. Unwrap sFRAX to FRAX
       // 3. Hold in wallet as FRAX
 
+      // Get final FRAX balance after emergency withdraw
+      const finalBalance = await publicClient.readContract({
+        address: FRAX_TOKEN,
+        abi: [{
+          name: 'balanceOf',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [{ name: 'account', type: 'address' }],
+          outputs: [{ type: 'uint256' }]
+        }],
+        functionName: 'balanceOf',
+        args: [agentAccount.address],
+      }) as bigint;
+
       return JSON.stringify({
         status: "EXECUTED",
         strategy: "emergency_withdraw",
         reason,
         result: {
           action: "Emergency withdrawal to FRAX",
-          current_balance: formatEther(balance),
+          current_balance: formatEther(finalBalance),
           safety_mode: true,
         },
         logs: [
           `🚨 EMERGENCY WITHDRAWAL EXECUTED`,
           `📤 Exited all positions`,
-          `💵 Holding: ${formatEther(balance)} FRAX`,
+          `💵 Holding: ${formatEther(finalBalance)} FRAX`,
           `🛡️ Safety Mode: Active`,
           `📝 Reason: ${reason}`,
         ],
