@@ -35,9 +35,9 @@ if (!AGENT_PRIVATE_KEY || AGENT_PRIVATE_KEY === "0x") {
 }
 
 // Fraxtal Contract Addresses (from Frax Finance docs)
-const SFRAX_CONTRACT = "0xfc00000000000000000000000000000000000008"; // sFRAX on Fraxtal NATIVE (FIXED!)
-const WFRAX_CONTRACT = "0xfc00000000000000000000000000000000000002"; // WFRAX (Wrapped FRAX) on Fraxtal
-const FRAX_TOKEN = "0xFc00000000000000000000000000000000000001"; // FRAX token on Fraxtal (legacy, not used)
+const SFRAX_CONTRACT = "0xfc00000000000000000000000000000000000008"; // sFRAX on Fraxtal NATIVE
+const FRAX_TOKEN = "0xFc00000000000000000000000000000000000001"; // FRAX ERC20 token on Fraxtal (required for sFRAX deposits)
+const WFRAX_CONTRACT = "0xfc00000000000000000000000000000000000002"; // WFRAX (Wrapped FRAX) on Fraxtal - NOT used for sFRAX!
 const FRAXLEND_AMO_V3 = "0x58C433482d74ABd15f4f8E7201DC4004c06CB611";
 
 // Setup Viem Clients
@@ -295,24 +295,24 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
     if (strategy_type === "conservative_mint") {
       console.log(`📤 Depositing ${formatEther(executeAmount)} FRAX into sFRAX vault...`);
 
-      // On Fraxtal, FRAX is native but sFRAX accepts WFRAX (ERC20)
-      // Process: Native FRAX → Wrap to WFRAX → Approve → Deposit into sFRAX
+      // On Fraxtal, FRAX is native but sFRAX accepts FRAX ERC20 token
+      // Process: Native FRAX → Wrap to FRAX ERC20 → Approve → Deposit into sFRAX
       
-      // Step 1: Wrap native FRAX to WFRAX (like wrapping ETH to WETH)
-      console.log(`📝 Step 1/3: Wrapping native FRAX to WFRAX...`);
+      // Step 1: Wrap native FRAX to FRAX ERC20 token (like wrapping ETH to WETH)
+      console.log(`📝 Step 1/3: Wrapping native FRAX to FRAX ERC20...`);
       const wrapTx = await walletClient.sendTransaction({
-        to: WFRAX_CONTRACT,
-        value: executeAmount,  // Send native FRAX, get WFRAX back
+        to: FRAX_TOKEN,
+        value: executeAmount,  // Send native FRAX, get FRAX ERC20 back
         data: '0xd0e30db0',  // deposit() function signature
       });
       
       await publicClient.waitForTransactionReceipt({ hash: wrapTx });
-      console.log(`✅ Wrapped ${formatEther(executeAmount)} FRAX → WFRAX. TX: ${wrapTx}`);
+      console.log(`✅ Wrapped ${formatEther(executeAmount)} native FRAX → FRAX ERC20. TX: ${wrapTx}`);
       
-      // Step 2: Approve sFRAX to spend WFRAX
-      console.log(`📝 Step 2/3: Approving WFRAX spending...`);
+      // Step 2: Approve sFRAX to spend FRAX ERC20
+      console.log(`📝 Step 2/3: Approving FRAX token spending...`);
       const approveTx = await walletClient.writeContract({
-        address: WFRAX_CONTRACT,
+        address: FRAX_TOKEN,
         abi: [{
           name: 'approve',
           type: 'function',
@@ -328,10 +328,10 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
       });
       
       await publicClient.waitForTransactionReceipt({ hash: approveTx });
-      console.log(`✅ WFRAX approved! TX: ${approveTx}`);
+      console.log(`✅ FRAX token approved! TX: ${approveTx}`);
       
-      // Step 3: Deposit WFRAX into sFRAX vault (ERC4626)
-      console.log(`📝 Step 3/3: Depositing WFRAX into sFRAX vault...`);
+      // Step 3: Deposit FRAX into sFRAX vault (ERC4626)
+      console.log(`📝 Step 3/3: Depositing FRAX into sFRAX vault...`);
       const depositTx = await walletClient.writeContract({
         address: SFRAX_CONTRACT,
         abi: [{
