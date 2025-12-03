@@ -21,11 +21,21 @@ export default function Home() {
   // Listen for agent wallet being shown in chat
   useEffect(() => {
     const handleAgentWalletDetected = (event: CustomEvent) => {
+      console.log("🚀 VAULT DETECTED EVENT FIRED!", event.detail);
       const { address } = event.detail;
+      console.log("🔥 Setting address:", address);
+      console.log("🔥 Setting showFundDashboard to TRUE");
       setAgentWalletAddress(address);
       setShowFundDashboard(true);
+      
+      // FORCE redirect with setTimeout to ensure state updates
+      setTimeout(() => {
+        console.log("🔥 FORCE REDIRECT - showFundDashboard:", showFundDashboard);
+        setShowFundDashboard(true);
+      }, 100);
     };
 
+    console.log("✅ Event listener registered for agentWalletDetected");
     window.addEventListener("agentWalletDetected", handleAgentWalletDetected as EventListener);
     return () => {
       window.removeEventListener("agentWalletDetected", handleAgentWalletDetected as EventListener);

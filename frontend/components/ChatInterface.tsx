@@ -294,6 +294,12 @@ export default function ChatInterface({
     // More flexible detection - trigger if we have address AND any vault-related keywords
     // This catches multiple output formats from the agent
     const lowerContent = content.toLowerCase();
+    
+    console.log("🔍 Checking for vault deployment...");
+    console.log("   Address found:", !!addressMatch);
+    console.log("   Contains 'autonomous vault':", lowerContent.includes("autonomous vault"));
+    console.log("   Contains 'i detect your deposit':", lowerContent.includes("i detect your deposit"));
+    
     if (addressMatch && (
       lowerContent.includes("autonomous vault") ||
       lowerContent.includes("your vault") ||
@@ -307,7 +313,9 @@ export default function ChatInterface({
       lowerContent.includes("📍") // Location pin emoji often used for addresses
     )) {
       const address = addressMatch[0];
-      console.log("Agent vault deployment detected:", address);
+      console.log("🎉 VAULT DEPLOYMENT DETECTED!");
+      console.log("   Address:", address);
+      console.log("   Dispatching agentWalletDetected event...");
       
       // Trigger FundDashboard display
       window.dispatchEvent(
@@ -315,6 +323,8 @@ export default function ChatInterface({
           detail: { address },
         })
       );
+      
+      console.log("✅ Event dispatched successfully");
     }
   };
 
