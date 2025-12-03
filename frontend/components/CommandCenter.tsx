@@ -71,6 +71,7 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
 
     eventSource.onmessage = (event) => {
       console.log("📡 CommandCenter: SSE message received:", event.data);
+      console.log("🔥 VERCEL BUILD VERSION: 051787b");
       try {
         const data: FundingUpdate = JSON.parse(event.data);
         
@@ -80,9 +81,10 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
           return;
         }
         
+        console.log("🚀 About to call handleFundingUpdate with:", data);
         handleFundingUpdate(data);
       } catch (err) {
-        console.error("SSE parse error:", err);
+        console.error("❌ SSE parse error:", err);
       }
     };
 
