@@ -391,12 +391,21 @@ async function autonomousWatcherLoop() {
     if (walletData.execution_capable) {
       const fraxBalance = parseFloat(walletData.balances.FRAX);
       
+      // CRITICAL FIX: Initialize lastKnownBalance on first run to prevent auto-investing on server restart
+      if (lastKnownBalance === "0" && fraxBalance > 0) {
+        lastKnownBalance = fraxBalance.toString();
+        addWatcherLog("info", `🔄 Server started: Tracking existing balance of ${fraxBalance.toFixed(4)} FRAX (no auto-invest on restart)`);
+      }
+      
       // Step 2: AUTO-INVEST Rule (0.01 FRAX minimum for testing)
-      if (fraxBalance > 0.01 && fraxBalance !== parseFloat(lastKnownBalance) && !isInvesting) {
+      // Only invest if balance INCREASED from last known balance
+      if (fraxBalance > 0.01 && fraxBalance > parseFloat(lastKnownBalance) && !isInvesting) {
         isInvesting = true; // Set flag immediately to prevent concurrent investments
+        
+        const depositAmount = fraxBalance - parseFloat(lastKnownBalance);
         lastKnownBalance = fraxBalance.toString(); // Update balance BEFORE investing
         
-        addWatcherLog("success", `💰 NEW CAPITAL DETECTED: ${fraxBalance.toFixed(4)} FRAX`);
+        addWatcherLog("success", `💰 NEW CAPITAL DETECTED: +${depositAmount.toFixed(4)} FRAX (Total: ${fraxBalance.toFixed(4)})`);
         
         // Broadcast deposit detected
         broadcastFundingUpdate({

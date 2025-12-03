@@ -21,8 +21,9 @@ if (!AGENT_PRIVATE_KEY) {
   console.warn("⚠️ AGENT_PRIVATE_KEY not found in .env - Execution tools will run in DEMO MODE");
 }
 
-// Fraxtal Contract Addresses
-const SFRAX_CONTRACT = "0xfc00000000000000000000000000000000000005"; // sfrxETH on Fraxtal (using as proxy for sFRAX)
+// Fraxtal Contract Addresses (from Frax Finance docs)
+const SFRAX_CONTRACT = "0xfc00000000000000000000000000000000000008"; // sFRAX on Fraxtal (native)
+const FRAX_TOKEN = "0xFc00000000000000000000000000000000000001"; // FRAX token on Fraxtal
 const FRAXLEND_AMO_V3 = "0x58C433482d74ABd15f4f8E7201DC4004c06CB611";
 
 // Setup Viem Clients
@@ -242,53 +243,88 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
     // STRATEGY: CONSERVATIVE MINT (sFRAX)
     // ======================================================================
     if (strategy_type === "conservative_mint") {
-      console.log(`📤 Minting sFRAX with ${formatEther(executeAmount)} FRAX...`);
+      console.log(`📤 Depositing ${formatEther(executeAmount)} FRAX into sFRAX vault...`);
 
-      // For sFRAX minting, we typically send FRAX to the sFRAX contract
-      // This is a simplified version - actual implementation would use the proper mint function
+      // sFRAX is an ERC4626 vault - we need to:
+      // 1. Approve FRAX token spending by sFRAX contract
+      // 2. Call deposit(amount, receiver) on sFRAX contract
       
-      // DEMO: Send FRAX to sFRAX contract (this would normally be a contract call)
-      // In production, you'd call the actual mint/deposit function with proper ABI
+      // Step 1: Approve FRAX spending
+      console.log(`📝 Step 1/2: Approving FRAX spending...`);
+      const approveTx = await walletClient.writeContract({
+        address: FRAX_TOKEN,
+        abi: [{
+          name: 'approve',
+          type: 'function',
+          stateMutability: 'nonpayable',
+          inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+          ],
+          outputs: [{ type: 'bool' }]
+        }],
+        functionName: 'approve',
+        args: [SFRAX_CONTRACT, executeAmount],
+      });
       
-      const tx = await walletClient.sendTransaction({
-        to: SFRAX_CONTRACT,
-        value: executeAmount,
-        gas: 100000n,
+      const approveReceipt = await publicClient.waitForTransactionReceipt({
+        hash: approveTx,
+      });
+      
+      console.log(`✅ FRAX approved! TX: ${approveTx}`);
+      
+      // Step 2: Deposit into sFRAX vault (ERC4626)
+      console.log(`📝 Step 2/2: Depositing into sFRAX vault...`);
+      const depositTx = await walletClient.writeContract({
+        address: SFRAX_CONTRACT,
+        abi: [{
+          name: 'deposit',
+          type: 'function',
+          stateMutability: 'nonpayable',
+          inputs: [
+            { name: 'assets', type: 'uint256' },
+            { name: 'receiver', type: 'address' }
+          ],
+          outputs: [{ name: 'shares', type: 'uint256' }]
+        }],
+        functionName: 'deposit',
+        args: [executeAmount, agentAccount.address],
       });
 
       // Wait for confirmation
-      console.log(`⏳ Waiting for confirmation... TX: ${tx}`);
+      console.log(`⏳ Waiting for confirmation... TX: ${depositTx}`);
       
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: tx,
+      const depositReceipt = await publicClient.waitForTransactionReceipt({
+        hash: depositTx,
       });
 
-      console.log(`✅ Transaction confirmed! Block: ${receipt.blockNumber}`);
+      console.log(`✅ Transaction confirmed! Block: ${depositReceipt.blockNumber}`);
 
       return JSON.stringify({
         status: "EXECUTED",
         strategy: "conservative_mint",
         reason,
         transaction: {
-          hash: tx,
-          block: receipt.blockNumber.toString(),
-          explorer: `https://fraxscan.com/tx/${tx}`,
+          approve_tx: approveTx,
+          deposit_tx: depositTx,
+          block: depositReceipt.blockNumber.toString(),
+          explorer: `https://fraxscan.com/tx/${depositTx}`,
           from: agentAccount.address,
           to: SFRAX_CONTRACT,
           amount: formatEther(executeAmount),
         },
         result: {
-          action: "Minted sFRAX",
-          expected_apy: "4.5%",
+          action: "Deposited FRAX into sFRAX vault (ERC4626)",
+          expected_apy: "5-10%",
           risk_level: "Low",
         },
         logs: [
-          `✅ STRATEGY EXECUTED: Conservative Mint`,
-          `💰 Invested: ${formatEther(executeAmount)} FRAX`,
-          `📊 Expected APY: 4.5%`,
-          `🛡️ Risk Level: Low (No liquidation)`,
-          `🔗 TX: ${tx}`,
-          `📍 Block: ${receipt.blockNumber}`,
+          `✅ STRATEGY EXECUTED: sFRAX Vault Deposit`,
+          `💰 Deposited: ${formatEther(executeAmount)} FRAX`,
+          `📊 Expected APY: 5-10% (tracks IORB rate)`,
+          `🛡️ Risk Level: Low (No liquidation, always withdrawable)`,
+          `🔗 Deposit TX: ${depositTx}`,
+          `📍 Block: ${depositReceipt.blockNumber}`,
         ],
       }, null, 2);
     }
