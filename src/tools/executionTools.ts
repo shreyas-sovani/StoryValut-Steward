@@ -68,19 +68,11 @@ async function getAgentWalletFn() {
   }
 
   try {
-    // Get FRAX ERC20 balance (NOT native gas token - that's frxETH!)
-    const fraxBalance = await publicClient.readContract({
-      address: FRAX_TOKEN,
-      abi: [{
-        name: 'balanceOf',
-        type: 'function',
-        stateMutability: 'view',
-        inputs: [{ name: 'account', type: 'address' }],
-        outputs: [{ type: 'uint256' }]
-      }],
-      functionName: 'balanceOf',
-      args: [agentAccount.address],
-    }) as bigint;
+    // CRITICAL: On Fraxtal, FRAX is the NATIVE token (like ETH on Ethereum)
+    // Use getBalance() for FRAX, NOT ERC20 balanceOf()!
+    const fraxBalance = await publicClient.getBalance({
+      address: agentAccount.address,
+    });
 
     console.log(`[WALLET CHECK] FRAX balance (raw): ${fraxBalance.toString()}`);
     console.log(`[WALLET CHECK] FRAX balance (formatted): ${formatEther(fraxBalance)}`);
@@ -245,24 +237,14 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
     console.log(`📝 Reason: ${reason}`);
     console.log(`💰 Amount: ${amount || "ALL AVAILABLE"}`);
 
-    // Get FRAX token balance (NOT native frxETH balance!)
-    // FRAX on Fraxtal is an ERC20 at 0xFc...0001, gas token is frxETH
-    const fraxBalance = await publicClient.readContract({
-      address: FRAX_TOKEN,
-      abi: [{
-        name: 'balanceOf',
-        type: 'function',
-        stateMutability: 'view',
-        inputs: [{ name: 'account', type: 'address' }],
-        outputs: [{ type: 'uint256' }]
-      }],
-      functionName: 'balanceOf',
-      args: [agentAccount.address],
-    }) as bigint;
+    // Get FRAX native balance (FRAX is the native token on Fraxtal!)
+    const fraxBalance = await publicClient.getBalance({
+      address: agentAccount.address,
+    });
 
     const executeAmount = amount 
       ? parseEther(amount)
-      : (fraxBalance * 95n) / 100n; // Use 95% of FRAX balance (keep 5% buffer)
+      : (fraxBalance * 95n) / 100n; // Use 95% of FRAX balance (keep 5% for gas)
 
     if (executeAmount <= 0n) {
       return JSON.stringify({
@@ -283,42 +265,16 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
     if (strategy_type === "conservative_mint") {
       console.log(`📤 Depositing ${formatEther(executeAmount)} FRAX into sFRAX vault...`);
 
-      // sFRAX is an ERC4626 vault - we need to:
-      // 1. Approve FRAX token spending by sFRAX contract
-      // 2. Call deposit(amount, receiver) on sFRAX contract
+      // On Fraxtal, FRAX is NATIVE token (like ETH on Ethereum)
+      // We send it as value in the transaction
       
-      // Step 1: Approve FRAX spending
-      console.log(`📝 Step 1/2: Approving FRAX spending...`);
-      const approveTx = await walletClient.writeContract({
-        address: FRAX_TOKEN,
-        abi: [{
-          name: 'approve',
-          type: 'function',
-          stateMutability: 'nonpayable',
-          inputs: [
-            { name: 'spender', type: 'address' },
-            { name: 'amount', type: 'uint256' }
-          ],
-          outputs: [{ type: 'bool' }]
-        }],
-        functionName: 'approve',
-        args: [SFRAX_CONTRACT, executeAmount],
-      });
-      
-      const approveReceipt = await publicClient.waitForTransactionReceipt({
-        hash: approveTx,
-      });
-      
-      console.log(`✅ FRAX approved! TX: ${approveTx}`);
-      
-      // Step 2: Deposit into sFRAX vault (ERC4626)
-      console.log(`📝 Step 2/2: Depositing into sFRAX vault...`);
+      console.log(`📝 Depositing native FRAX into sFRAX vault with value...`);
       const depositTx = await walletClient.writeContract({
         address: SFRAX_CONTRACT,
         abi: [{
           name: 'deposit',
           type: 'function',
-          stateMutability: 'nonpayable',
+          stateMutability: 'payable',  // Accept native FRAX value
           inputs: [
             { name: 'assets', type: 'uint256' },
             { name: 'receiver', type: 'address' }
@@ -327,6 +283,7 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
         }],
         functionName: 'deposit',
         args: [executeAmount, agentAccount.address],
+        value: executeAmount,  // Send native FRAX as value
       });
 
       // Wait for confirmation
@@ -343,8 +300,7 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
         strategy: "conservative_mint",
         reason,
         transaction: {
-          approve_tx: approveTx,
-          deposit_tx: depositTx,
+          hash: depositTx,
           block: depositReceipt.blockNumber.toString(),
           explorer: `https://fraxscan.com/tx/${depositTx}`,
           from: agentAccount.address,
@@ -352,13 +308,13 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
           amount: formatEther(executeAmount),
         },
         result: {
-          action: "Deposited FRAX into sFRAX vault (ERC4626)",
+          action: "Deposited native FRAX into sFRAX vault",
           expected_apy: "5-10%",
           risk_level: "Low",
         },
         logs: [
           `✅ STRATEGY EXECUTED: sFRAX Vault Deposit`,
-          `💰 Deposited: ${formatEther(executeAmount)} FRAX`,
+          `💰 Deposited: ${formatEther(executeAmount)} native FRAX`,
           `📊 Expected APY: 5-10% (tracks IORB rate)`,
           `🛡️ Risk Level: Low (No liquidation, always withdrawable)`,
           `🔗 Deposit TX: ${depositTx}`,
