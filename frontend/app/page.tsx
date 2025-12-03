@@ -3,12 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import ChatInterface from "@/components/ChatInterface";
 import VaultCard from "@/components/VaultCard";
-import FundDashboard from "@/components/FundDashboard";
+import CommandCenter from "@/components/CommandCenter";
 
 export default function Home() {
   const [vaultData, setVaultData] = useState(null);
   const [monitoring, setMonitoring] = useState<any>(null);
-  const [showFundDashboard, setShowFundDashboard] = useState(false);
+  const [showCommandCenter, setShowCommandCenter] = useState(false);
   const [agentWalletAddress, setAgentWalletAddress] = useState<string | null>(null);
   const chatInputRef = useRef<{ sendMessage: (msg: string) => void } | null>(
     null
@@ -24,14 +24,14 @@ export default function Home() {
       console.log("🚀 VAULT DETECTED EVENT FIRED!", event.detail);
       const { address } = event.detail;
       console.log("🔥 Setting address:", address);
-      console.log("🔥 Setting showFundDashboard to TRUE");
+      console.log("🔥 Setting showCommandCenter to TRUE");
       setAgentWalletAddress(address);
-      setShowFundDashboard(true);
+      setShowCommandCenter(true);
       
       // FORCE redirect with setTimeout to ensure state updates
       setTimeout(() => {
-        console.log("🔥 FORCE REDIRECT - showFundDashboard:", showFundDashboard);
-        setShowFundDashboard(true);
+        console.log("🔥 FORCE REDIRECT - showCommandCenter:", true);
+        setShowCommandCenter(true);
       }, 100);
     };
 
@@ -58,15 +58,9 @@ export default function Home() {
 
   return (
     <main className="h-screen w-full overflow-hidden bg-[#030014]">
-      {showFundDashboard ? (
-        /* Full Screen Fund Dashboard */
-        <FundDashboard
-          agentAddress={agentWalletAddress || "Loading..."}
-          sessionId={sessionId}
-          onSimulateCrash={() => {
-            console.log("Crash simulated from dashboard");
-          }}
-        />
+      {showCommandCenter ? (
+        /* Full Screen Command Center */
+        <CommandCenter walletAddress={agentWalletAddress || "Loading..."} />
       ) : (
         /* Original Split View */
         <div className="h-full grid grid-cols-1 lg:grid-cols-2">
