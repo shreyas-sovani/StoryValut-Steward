@@ -391,10 +391,18 @@ async function autonomousWatcherLoop() {
     if (walletData.execution_capable) {
       const fraxBalance = parseFloat(walletData.balances.FRAX);
       
+      // DEBUG: Log balance check details
+      console.log(`[WATCHER DEBUG] Current FRAX balance: ${fraxBalance.toFixed(6)}`);
+      console.log(`[WATCHER DEBUG] Last known balance: ${lastKnownBalance}`);
+      console.log(`[WATCHER DEBUG] Balance increased: ${fraxBalance > parseFloat(lastKnownBalance)}`);
+      console.log(`[WATCHER DEBUG] Above minimum (0.01): ${fraxBalance > 0.01}`);
+      console.log(`[WATCHER DEBUG] Not investing: ${!isInvesting}`);
+      
       // CRITICAL FIX: Initialize lastKnownBalance on first run to prevent auto-investing on server restart
       if (lastKnownBalance === "0" && fraxBalance > 0) {
         lastKnownBalance = fraxBalance.toString();
         addWatcherLog("info", `🔄 Server started: Tracking existing balance of ${fraxBalance.toFixed(4)} FRAX (no auto-invest on restart)`);
+        console.log(`[WATCHER DEBUG] Initialized lastKnownBalance to: ${lastKnownBalance}`);
       }
       
       // Step 2: AUTO-INVEST Rule (0.01 FRAX minimum for testing)
@@ -405,6 +413,7 @@ async function autonomousWatcherLoop() {
         const depositAmount = fraxBalance - parseFloat(lastKnownBalance);
         lastKnownBalance = fraxBalance.toString(); // Update balance BEFORE investing
         
+        console.log(`[WATCHER] 🎉 DEPOSIT DETECTED! Amount: +${depositAmount.toFixed(6)} FRAX`);
         addWatcherLog("success", `💰 NEW CAPITAL DETECTED: +${depositAmount.toFixed(4)} FRAX (Total: ${fraxBalance.toFixed(4)})`);
         
         // Broadcast deposit detected

@@ -82,6 +82,9 @@ async function getAgentWalletFn() {
       args: [agentAccount.address],
     }) as bigint;
 
+    console.log(`[WALLET CHECK] FRAX balance (raw): ${fraxBalance.toString()}`);
+    console.log(`[WALLET CHECK] FRAX balance (formatted): ${formatEther(fraxBalance)}`);
+
     // Get sFRAX balance (ERC4626 vault shares)
     const sfraxBalance = await publicClient.readContract({
       address: SFRAX_CONTRACT,
@@ -95,6 +98,9 @@ async function getAgentWalletFn() {
       functionName: 'balanceOf',
       args: [agentAccount.address],
     }) as bigint;
+
+    console.log(`[WALLET CHECK] sFRAX balance (raw): ${sfraxBalance.toString()}`);
+    console.log(`[WALLET CHECK] sFRAX balance (formatted): ${formatEther(sfraxBalance)}`);
 
     const walletInfo = {
       address: agentAccount.address,
