@@ -46,10 +46,10 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
   
   const logsEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll logs to bottom
-  useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
+  // Auto-scroll logs to bottom - DISABLED (user requested no auto-scroll)
+  // useEffect(() => {
+  //   logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // }, [logs]);
 
   // God Mode - Simulate Crash
   const simulateCrash = () => {
@@ -77,14 +77,19 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
 
     eventSource.onopen = () => {
       console.log("✅ CommandCenter: SSE connection established");
+      console.log("🔗 Waiting for server messages...");
       addLog("🔗 Live stream connected to backend", "success");
     };
 
     eventSource.onmessage = (event) => {
       console.log("📡 CommandCenter: SSE message received:", event.data);
       console.log("🔥 VERCEL BUILD VERSION: 051787b");
+      console.log("📦 Event type:", event.type);
+      console.log("📦 Event lastEventId:", event.lastEventId);
+      
       try {
         const data: FundingUpdate = JSON.parse(event.data);
+        console.log("✅ Parsed data:", data);
         
         // Ignore heartbeat messages
         if (data.type === "heartbeat") {
@@ -96,6 +101,7 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
         handleFundingUpdate(data);
       } catch (err) {
         console.error("❌ SSE parse error:", err);
+        console.error("❌ Raw event data:", event.data);
       }
     };
 
@@ -189,12 +195,21 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
         addLog(`💰 NEW DEPOSIT DETECTED: +${data.amount} FRAX`, "deposit");
         
         // Update total AUM
-        setAum(prev => prev + depositAmount);
-        // Update available balance
-        setAvailableBalance(prev => prev + depositAmount);
+        setAum(prev => {
+          const newAum = prev + depositAmount;
+          console.log("📊 AUM updated:", prev, "→", newAum);
+          return newAum;
+        });
         
-        addLog(`📊 Available Balance: ${(availableBalance + depositAmount).toFixed(4)} FRAX`, "info");
-        console.log("📈 CommandCenter: Updated balances", { aum: aum + depositAmount, available: availableBalance + depositAmount });
+        // Update available balance
+        setAvailableBalance(prev => {
+          const newBalance = prev + depositAmount;
+          console.log("💰 Available updated:", prev, "→", newBalance);
+          addLog(`📊 Available Balance: ${newBalance.toFixed(4)} FRAX`, "info");
+          return newBalance;
+        });
+        
+        console.log("✅ CommandCenter: Deposit processing complete");
         break;
 
       case "INVESTED":
@@ -214,8 +229,17 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
         }
         
         // Subtract from available balance, add to invested
-        setAvailableBalance(prev => Math.max(0, prev - investAmount));
-        setInvestedAmount(prev => prev + investAmount);
+        setAvailableBalance(prev => {
+          const newBalance = Math.max(0, prev - investAmount);
+          console.log("💼 Available after investment:", prev, "→", newBalance);
+          return newBalance;
+        });
+        
+        setInvestedAmount(prev => {
+          const newInvested = prev + investAmount;
+          console.log("📈 Invested amount:", prev, "→", newInvested);
+          return newInvested;
+        });
         
         // Simulate yield fluctuation
         const newYield = 4.5 + (Math.random() * 0.1 - 0.05);
@@ -224,7 +248,13 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
         
         setTimeout(() => {
           addLog(`🎯 Position Active: ${investAmount.toFixed(4)} FRAX earning 5-10% APY`, "success");
-          addLog(`💼 Available: ${Math.max(0, availableBalance - investAmount).toFixed(4)} FRAX | Deployed: ${(investedAmount + investAmount).toFixed(4)} FRAX`, "info");
+          setAvailableBalance(prevAvail => {
+            setInvestedAmount(prevInv => {
+              addLog(`💼 Available: ${prevAvail.toFixed(4)} FRAX | Deployed: ${prevInv.toFixed(4)} FRAX`, "info");
+              return prevInv;
+            });
+            return prevAvail;
+          });
           setIsInvesting(false);
         }, 2000);
         break;
