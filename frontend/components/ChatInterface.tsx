@@ -288,41 +288,48 @@ export default function ChatInterface({
 
   // Parse agent wallet address from responses (Phase 8 - Autonomous Hedge Fund)
   const detectAgentWallet = (content: string) => {
-    // Look for agent wallet address pattern (0x followed by 40 hex characters)
-    const addressMatch = content.match(/0x[a-fA-F0-9]{40}/);
+    // Look for FULL agent wallet address pattern (0x followed by 40 hex characters)
+    const fullAddressMatch = content.match(/0x[a-fA-F0-9]{40}/);
+    
+    // FALLBACK: Also check for "vault address:" or "deposit address:" followed by any 0x pattern
+    // This catches cases where agent might show abbreviated address
+    const addressLineMatch = content.match(/(?:vault address|deposit address):\s*(0x[a-fA-F0-9]+)/i);
+    
+    const addressMatch = fullAddressMatch || (addressLineMatch ? addressLineMatch[1].match(/0x[a-fA-F0-9]{40}/) : null);
     
     if (!addressMatch) {
-      console.log("🔍 No address found in response yet");
+      console.log("🔍 No valid 40-character address found in response");
+      // Check if there's an abbreviated address (debugging)
+      const abbreviatedMatch = content.match(/0x[a-fA-F0-9]+\.\.\.[a-fA-F0-9]+/);
+      if (abbreviatedMatch) {
+        console.error("❌ AGENT ERROR: Found abbreviated address:", abbreviatedMatch[0]);
+        console.error("   Agent must show FULL 42-character address for redirect to work!");
+      }
       return;
     }
     
-    // More flexible detection - trigger redirect when:
-    // 1. We have an address AND
-    // 2. The message indicates vault initialization/readiness
+    const address = addressMatch[0];
     const lowerContent = content.toLowerCase();
     
-    console.log("🔍 Address detected:", addressMatch[0]);
+    console.log("✅ Full address detected:", address);
     console.log("   Checking for vault initialization keywords...");
     
-    // Trigger redirect if we see vault-related keywords OR user agreement context
+    // Trigger redirect if we see vault-related keywords
     const shouldRedirect = (
-      lowerContent.includes("autonomous vault") ||
-      lowerContent.includes("your vault") ||
       lowerContent.includes("initializing") ||
       lowerContent.includes("redirecting") ||
       lowerContent.includes("fund dashboard") ||
-      lowerContent.includes("🚀") || // Rocket emoji for "launching"
-      lowerContent.includes("🏦") || // Vault emoji
-      lowerContent.includes("active_listening") ||
-      lowerContent.includes("vault at 0x") || // "Your vault at 0x..."
+      lowerContent.includes("autonomous vault") ||
+      lowerContent.includes("your vault") ||
+      lowerContent.includes("vault address") ||
+      lowerContent.includes("🚀") || // Rocket emoji
+      lowerContent.includes("↗️") || // Arrow emoji
       (lowerContent.includes("ready") && lowerContent.includes("0x")) ||
       (lowerContent.includes("set up") && lowerContent.includes("0x"))
     );
     
     if (shouldRedirect) {
-      const address = addressMatch[0];
       console.log("🎉 VAULT INITIALIZATION DETECTED!");
-      console.log("   Address:", address);
       console.log("   Triggering redirect to FundDashboard...");
       
       // Trigger FundDashboard display
@@ -335,6 +342,11 @@ export default function ChatInterface({
       console.log("✅ Redirect event dispatched!");
     } else {
       console.log("   No vault keywords found - not redirecting yet");
+      console.log("   Content includes:", {
+        initializing: lowerContent.includes("initializing"),
+        redirecting: lowerContent.includes("redirecting"),
+        vault: lowerContent.includes("vault"),
+      });
     }
   };
 
