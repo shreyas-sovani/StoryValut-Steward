@@ -118,7 +118,7 @@ export default function FundDashboard({
   const healthStatus = yield_rate >= 3.5 ? "healthy" : yield_rate >= 2.0 ? "warning" : "critical";
 
   return (
-    <div className="min-h-screen bg-black text-green-400 font-mono p-6">
+    <div className="min-h-screen max-h-screen overflow-y-auto bg-black text-green-400 font-mono p-6">
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-6">
         <div className="flex items-center justify-between mb-6">
