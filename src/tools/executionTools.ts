@@ -15,10 +15,23 @@ import { createTool } from "@iqai/adk";
 // CONFIGURATION
 // ============================================================================
 
-const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY || "";
+// DEBUG: Check environment variable loading
+console.log("🔍 [INIT] Checking AGENT_PRIVATE_KEY environment variable...");
+console.log(`🔍 [INIT] AGENT_PRIVATE_KEY exists: ${!!process.env.AGENT_PRIVATE_KEY}`);
+console.log(`🔍 [INIT] AGENT_PRIVATE_KEY length: ${process.env.AGENT_PRIVATE_KEY?.length || 0}`);
+console.log(`🔍 [INIT] AGENT_PRIVATE_KEY starts with 0x: ${process.env.AGENT_PRIVATE_KEY?.startsWith("0x") || false}`);
 
-if (!AGENT_PRIVATE_KEY) {
+// Normalize private key (add 0x prefix if missing)
+let AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY || "";
+
+if (AGENT_PRIVATE_KEY && !AGENT_PRIVATE_KEY.startsWith("0x")) {
+  AGENT_PRIVATE_KEY = `0x${AGENT_PRIVATE_KEY}`;
+  console.log("🔧 Auto-added 0x prefix to AGENT_PRIVATE_KEY");
+}
+
+if (!AGENT_PRIVATE_KEY || AGENT_PRIVATE_KEY === "0x") {
   console.warn("⚠️ AGENT_PRIVATE_KEY not found in .env - Execution tools will run in DEMO MODE");
+  console.warn(`⚠️ [DEBUG] Raw value: "${process.env.AGENT_PRIVATE_KEY}"`);
 }
 
 // Fraxtal Contract Addresses (from Frax Finance docs)
@@ -36,7 +49,7 @@ const publicClient = createPublicClient({
 let walletClient: any = null;
 let agentAccount: any = null;
 
-if (AGENT_PRIVATE_KEY && AGENT_PRIVATE_KEY.startsWith("0x")) {
+if (AGENT_PRIVATE_KEY && AGENT_PRIVATE_KEY !== "0x") {
   try {
     agentAccount = privateKeyToAccount(AGENT_PRIVATE_KEY as `0x${string}`);
     walletClient = createWalletClient({
@@ -45,9 +58,13 @@ if (AGENT_PRIVATE_KEY && AGENT_PRIVATE_KEY.startsWith("0x")) {
       transport: http("https://rpc.frax.com"),
     });
     console.log("🔐 Agent Wallet Initialized:", agentAccount.address);
+    console.log("✅ EXECUTION MODE: Live transactions enabled");
   } catch (error) {
     console.error("❌ Failed to initialize agent wallet:", error);
+    console.error("   Make sure AGENT_PRIVATE_KEY is a valid 64-character hex string");
   }
+} else {
+  console.warn("🎭 DEMO MODE: Set AGENT_PRIVATE_KEY environment variable for live execution");
 }
 
 // ============================================================================
