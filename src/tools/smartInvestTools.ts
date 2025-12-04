@@ -59,7 +59,7 @@ const CONTRACTS = {
   
   // FraxtalERC4626MintRedeemer - Required for sfrxUSD staking on Fraxtal
   // See: https://docs.frax.com/frxusd/staking-and-unstaking-frxusd-on-fraxtal
-  frxUSDStakeUnstake: "0xBFc4D34Db83535725eC6c768da71D2D9c1456B55" as Address,
+  frxUSDStakeUnstake: "0xBFc4D34Db83553725eC6c768da71D2D9c1456B55" as Address,
 } as const;
 
 // ============================================================================
