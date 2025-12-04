@@ -50,6 +50,14 @@ interface LeverageRecommendation {
   warning?: string | null;
 }
 
+// Strategy recommendation detected from AI
+interface DetectedStrategy {
+  stablePercent: number;
+  yieldPercent: number;
+  description: string;
+  expectedApy?: string;
+}
+
 interface ChatInterfaceProps {
   sessionId: string;
   onVaultDeployed?: (vaultData: any) => void;
@@ -68,6 +76,7 @@ export default function ChatInterface({
   const [leverageRecommendation, setLeverageRecommendation] = useState<LeverageRecommendation | null>(null);
   const [showCommandCenter, setShowCommandCenter] = useState(false);
   const [commandCenterAddress, setCommandCenterAddress] = useState("");
+  const [detectedStrategy, setDetectedStrategy] = useState<DetectedStrategy | null>(null);
   const [monitoring, setMonitoring] = useState<MonitoringData>({
     active: false,
     asset: "",
@@ -118,6 +127,7 @@ export default function ChatInterface({
             setStreamingContent(fullResponse);
             detectMonitoringEvent(fullResponse);
             detectLeverageRecommendation(fullResponse);
+            detectStrategyRecommendation(fullResponse);
             detectAgentWallet(fullResponse);
           }
         },
@@ -289,6 +299,123 @@ export default function ChatInterface({
     }
   };
 
+  // Parse strategy recommendation from AI response
+  const detectStrategyRecommendation = (content: string) => {
+    // Already detected a strategy - don't re-parse
+    if (detectedStrategy) return;
+    
+    const lowerContent = content.toLowerCase();
+    
+    // Look for strategy patterns in the content
+    // Pattern 1: "X% sfrxUSD/stable" + "Y% sfrxETH/volatile"
+    const stablePatterns = [
+      /(\d+)%?\s*(?:to\s+)?(?:sfrxusd|stable|conservative|low.risk)/i,
+      /(?:sfrxusd|stable|conservative).*?(\d+)%/i,
+    ];
+    const volatilePatterns = [
+      /(\d+)%?\s*(?:to\s+)?(?:sfrxeth|volatile|growth|aggressive|higher.risk)/i,
+      /(?:sfrxeth|volatile|growth|aggressive).*?(\d+)%/i,
+    ];
+    
+    // Pattern 2: Look for allocation keywords
+    const hasAllocationKeywords = 
+      lowerContent.includes("recommend") || 
+      lowerContent.includes("allocat") ||
+      lowerContent.includes("split") ||
+      lowerContent.includes("strategy") ||
+      lowerContent.includes("portfolio");
+    
+    if (!hasAllocationKeywords) return;
+    
+    let stablePercent: number | null = null;
+    let volatilePercent: number | null = null;
+    
+    // Try to extract percentages
+    for (const pattern of stablePatterns) {
+      const match = content.match(pattern);
+      if (match) {
+        stablePercent = parseInt(match[1]);
+        break;
+      }
+    }
+    
+    for (const pattern of volatilePatterns) {
+      const match = content.match(pattern);
+      if (match) {
+        volatilePercent = parseInt(match[1]);
+        break;
+      }
+    }
+    
+    // If we only found one, calculate the other
+    if (stablePercent !== null && volatilePercent === null) {
+      volatilePercent = 100 - stablePercent;
+    } else if (volatilePercent !== null && stablePercent === null) {
+      stablePercent = 100 - volatilePercent;
+    }
+    
+    // Fallback: look for any two percentages that add up to ~100 (excluding APY-like percentages)
+    if (stablePercent === null && volatilePercent === null) {
+      // Get all percentages but filter out APY percentages (usually small like 4-8%)
+      const allMatches = [...content.matchAll(/(\d+)%/g)];
+      const percentages: number[] = [];
+      
+      for (const match of allMatches) {
+        const num = parseInt(match[1]);
+        // Skip small percentages that are likely APY values (< 15%)
+        // Strategy splits are usually larger numbers like 30, 40, 50, 60, 70
+        if (num >= 20 && num <= 100) {
+          percentages.push(num);
+        }
+      }
+      
+      // Look for pairs that add to ~100
+      for (let i = 0; i < percentages.length; i++) {
+        for (let j = i + 1; j < percentages.length; j++) {
+          if (percentages[i] + percentages[j] >= 95 && percentages[i] + percentages[j] <= 105) {
+            // Found a pair that adds to ~100
+            stablePercent = Math.max(percentages[i], percentages[j]); // Assume larger is stable
+            volatilePercent = Math.min(percentages[i], percentages[j]);
+            break;
+          }
+        }
+        if (stablePercent !== null) break;
+      }
+    }
+    
+    // Extract APY if mentioned
+    const apyMatch = content.match(/(?:expected|projected|estimated|blended)?\s*(?:APY|apy)[:\s]*~?(\d+\.?\d*)%/i);
+    const expectedApy = apyMatch ? `${apyMatch[1]}%` : undefined;
+    
+    // If we found valid percentages, set the detected strategy
+    if (stablePercent !== null && volatilePercent !== null && 
+        stablePercent >= 0 && stablePercent <= 100 &&
+        volatilePercent >= 0 && volatilePercent <= 100) {
+      console.log("✅ Strategy detected:", { stablePercent, volatilePercent, expectedApy });
+      setDetectedStrategy({
+        stablePercent,
+        yieldPercent: volatilePercent, // yieldPercent is actually volatilePercent in the interface
+        description: `${stablePercent}% Stable (sfrxUSD) / ${volatilePercent}% Growth (sfrxETH)`,
+        expectedApy,
+      });
+    }
+  };
+
+  // Handle accepting the strategy - dispatch event to parent
+  const handleAcceptStrategy = () => {
+    if (!detectedStrategy) return;
+    
+    console.log("🚀 Accepting strategy:", detectedStrategy);
+    window.dispatchEvent(
+      new CustomEvent("strategyAccepted", {
+        detail: {
+          stablePercent: detectedStrategy.stablePercent,
+          yieldPercent: detectedStrategy.yieldPercent,
+        },
+      })
+    );
+  };
+
   // Parse agent wallet address from responses (Phase 8 - Autonomous Hedge Fund)
   const detectAgentWallet = (content: string) => {
     // Look for FULL agent wallet address pattern (0x followed by 40 hex characters)
@@ -386,6 +513,9 @@ export default function ChatInterface({
           
           // Detect leverage recommendations (Goal Governor)
           detectLeverageRecommendation(fullResponse);
+          
+          // Detect strategy recommendations from AI
+          detectStrategyRecommendation(fullResponse);
           
           // Detect agent wallet address (Phase 8)
           detectAgentWallet(fullResponse);
@@ -643,6 +773,80 @@ export default function ChatInterface({
           {messages.map((message, index) => (
             <MessageBubble key={index} message={message} />
           ))}
+
+          {/* Strategy Recommendation Card - Accept to proceed */}
+          {detectedStrategy && (
+            <div className="bg-gradient-to-br from-cyan-900/30 to-purple-900/30 border border-cyan-500/30 rounded-2xl p-6 shadow-xl">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                  <span className="text-2xl">🎯</span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-white mb-2">
+                    Recommended Strategy
+                  </h3>
+                  <p className="text-gray-300 text-sm mb-4">
+                    Based on your story, here's your personalized allocation:
+                  </p>
+                  
+                  {/* Strategy Visualization */}
+                  <div className="bg-gray-800/50 rounded-xl p-4 mb-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-cyan-400 font-medium">
+                        🛡️ Stable (sfrxETH)
+                      </span>
+                      <span className="text-white font-bold">
+                        {detectedStrategy.stablePercent}%
+                      </span>
+                    </div>
+                    <div className="h-3 bg-gray-700 rounded-full overflow-hidden mb-4">
+                      <div 
+                        className="h-full bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-full transition-all duration-500"
+                        style={{ width: `${detectedStrategy.stablePercent}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-purple-400 font-medium">
+                        📈 Yield (Fraxlend)
+                      </span>
+                      <span className="text-white font-bold">
+                        {detectedStrategy.yieldPercent}%
+                      </span>
+                    </div>
+                    <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-purple-500 to-purple-400 rounded-full transition-all duration-500"
+                        style={{ width: `${detectedStrategy.yieldPercent}%` }}
+                      />
+                    </div>
+                    {detectedStrategy.expectedApy && (
+                      <div className="mt-4 pt-3 border-t border-gray-700 flex items-center justify-between">
+                        <span className="text-gray-400 text-sm">Expected APY</span>
+                        <span className="text-green-400 font-bold">{detectedStrategy.expectedApy}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleAcceptStrategy}
+                      className="flex-1 px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2"
+                    >
+                      <span>✅</span>
+                      Accept & Continue
+                    </button>
+                    <button
+                      onClick={() => setDetectedStrategy(null)}
+                      className="px-4 py-3 rounded-xl font-medium text-gray-400 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-all"
+                    >
+                      Modify
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Leverage Recommendation Card (Goal Governor) */}
           {leverageRecommendation && (

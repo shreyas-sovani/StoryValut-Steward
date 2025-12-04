@@ -5,6 +5,9 @@
  * The Agent can now EXECUTE strategies, not just recommend them.
  */
 
+import dotenv from "dotenv";
+dotenv.config(); // Load environment variables FIRST
+
 import { createPublicClient, createWalletClient, http, parseEther, formatEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { fraxtal } from "viem/chains";
@@ -41,40 +44,59 @@ if (!AGENT_PRIVATE_KEY || AGENT_PRIVATE_KEY === "0x") {
 // This is different from Ethereum mainnet where ETH is native.
 
 // ============================================================================
-// FRAXTAL TOKEN ADDRESSES (From project_context/fraxtal_doc.md - OFFICIAL)
+// FRAXTAL V2 TOKEN ADDRESSES - "NORTH STAR" CONFIGURATION
 // ============================================================================
 // 
-// CRITICAL CORRECTION: On Fraxtal, FRAX is the NATIVE GAS TOKEN (NOT frxETH!)
-// Source: https://docs.frax.com/fraxtal/network-parameters/tokens
+// CRITICAL: Fraxtal V2 Architecture (Chain ID: 252)
+// Source: Fraxtal Docs + Official Contract Registry
 // 
-// Fraxtal Mainnet Predeploy Addresses:
-// - FRAX:      Native Token (gas token, like ETH on Ethereum)
-// - WFRAX:     0xfc00000000000000000000000000000000000002  (Wrapped FRAX ERC20)
+// NATIVE GAS TOKEN:
+// - FRAX:      Native Token (like ETH on Ethereum, used for gas fees)
+//
+// INVESTMENT TOKENS:
+// - frxETH:    0xfc00000000000000000000000000000000000006  (ERC-20 liquid staking token)
+// - sfrxETH:   0xfc00000000000000000000000000000000000005  (ERC-4626 vault for frxETH)
+//
+// ⚠️ IMPORTANT: On Fraxtal L2, sfrxETH is a BRIDGED yield token.
+// The deposit() function on sfrxETH DOES NOT WORK on Fraxtal - it reverts.
+// To acquire sfrxETH on Fraxtal, use Fraxswap V2:
+//   - Swap frxETH → sfrxETH via Fraxswap V2 Router
+//   - Pair: 0x07412F06DB215A20909C3c29FaA3cC7A48777185 (frxETH/sfrxETH)
+//   - Router: 0x7ae2A0f3D9eF911A0a3f726FA9fbFCA25Dc18f7A
+//
+// OTHER FRAXTAL TOKENS (for reference):
+// - WFRAX:     0xfc00000000000000000000000000000000000002  (Wrapped FRAX ERC-20)
 // - frxUSD:    0xfc00000000000000000000000000000000000001  (USD stablecoin)
 // - sfrxUSD:   0xfc00000000000000000000000000000000000008  (Staked frxUSD vault)
 // - FPI:       0xfc00000000000000000000000000000000000003  (CPI-pegged stablecoin)
 // - FPIS:      0xfc00000000000000000000000000000000000004  (FPI governance)
-// - sfrxETH:   0xfc00000000000000000000000000000000000005  (Staked frxETH vault)
-// - frxETH:    0xfc00000000000000000000000000000000000006  (Frax Ether ERC20)
-// - frxBTC:    0xfc00000000000000000000000000000000000007  (Frax Bitcoin ERC20)
+// - frxBTC:    0xfc00000000000000000000000000000000000007  (Frax Bitcoin ERC-20)
 //
-// WORKFLOW ON FRAXTAL:
-// 1. User deposits FRAX (native) → Agent receives native balance
-// 2. Agent must convert FRAX → frxETH (swap on DEX like Fraxswap)
-// 3. Agent wraps/deposits frxETH → sfrxETH vault
+// REAL YIELD OPTIMIZATION WORKFLOW (V2 - Fraxtal L2):
+// For sfrxUSD: frxUSD → approve MintRedeemer → deposit (works)
+// For sfrxETH: frxETH → approve Router → swap via Fraxswap V2 (required on L2)
+//
+// NOTE: The old deposit() pattern for sfrxETH only works on Ethereum mainnet.
+//       On Fraxtal L2, use smartInvestTools.ts which swaps via Fraxswap.
 // ============================================================================
 
-const WFRAX_CONTRACT = "0xfc00000000000000000000000000000000000002"; // Wrapped FRAX (ERC20)
+const FRXETH_TOKEN = "0xfc00000000000000000000000000000000000006"; // frxETH (ERC-20 liquid staking token)
+const SFRXETH_CONTRACT = "0xfc00000000000000000000000000000000000005"; // sfrxETH Vault (ERC-4626)
+
+// Legacy addresses (for backwards compatibility with old functions)
+const WFRAX_CONTRACT = "0xfc00000000000000000000000000000000000002"; // Wrapped FRAX (ERC-20)
 const FRXUSD_TOKEN = "0xfc00000000000000000000000000000000000001"; // frxUSD stablecoin
 const SFRXUSD_CONTRACT = "0xfc00000000000000000000000000000000000008"; // sfrxUSD Vault
 const FPI_TOKEN = "0xfc00000000000000000000000000000000000003"; // FPI stablecoin
 const FPIS_TOKEN = "0xfc00000000000000000000000000000000000004"; // FPIS governance
-const SFRXETH_CONTRACT = "0xfc00000000000000000000000000000000000005"; // sfrxETH Vault (ERC4626)
-const FRXETH_TOKEN = "0xfc00000000000000000000000000000000000006"; // frxETH (ERC20)
-const FRXBTC_TOKEN = "0xfc00000000000000000000000000000000000007"; // frxBTC (ERC20)
+const FRXBTC_TOKEN = "0xfc00000000000000000000000000000000000007"; // frxBTC (ERC-20)
+
+// Additional legacy constants for old execute_strategy function
+const FRAX_TOKEN = WFRAX_CONTRACT; // For legacy compatibility
+const SFRAX_CONTRACT = SFRXUSD_CONTRACT; // For legacy compatibility
+const WFRXETH_CONTRACT = FRXETH_TOKEN; // Legacy alias (old 3-step flow, now deprecated)
 
 // Legacy addresses (for backwards compatibility with old execute_strategy function)
-const TREASURY_ADDRESS = "0x79bC47e448b1B52F3DE651a0d102FD73FaDD7B7C";
 const FRAXLEND_AMO_V3 = "0x58C433482d74ABd15f4f8E7201DC4004c06CB611";
 
 // Setup Viem Clients
@@ -133,23 +155,39 @@ export function setSSEBroadcaster(broadcaster: BroadcastFn) {
 /**
  * Execute a REAL micro-investment into sfrxETH vault.
  * 
+ * ⚠️ DEPRECATED ON FRAXTAL L2: This function uses the sfrxETH deposit() method
+ * which DOES NOT WORK on Fraxtal L2. The deposit() function reverts on L2.
+ * 
+ * For production Smart Invest, use executeInvestmentSequence() from smartInvestTools.ts
+ * which swaps frxETH → sfrxETH via Fraxswap V2 router instead.
+ * 
+ * This function is kept for backward compatibility on Ethereum mainnet only.
+ * 
+ * FRAXTAL V2 ARCHITECTURE:
+ * - Native Gas: FRAX (used for transaction fees)
+ * - Investment Token: frxETH (ERC-20 token at 0xfc...06)
+ * - Target Vault: sfrxETH (ERC-4626 vault at 0xfc...05)
+ * 
  * SAFETY FEATURES:
  * - Hardcoded 0.0001 frxETH investment (~$0.35)
- * - Requires minimum 0.002 frxETH balance before executing
- * - 3-step process: Wrap -> Approve -> Deposit
+ * - Requires minimum 0.01 FRAX for gas fees
+ * - Requires minimum 0.0001 frxETH (ERC-20) balance
+ * - 2-step process: Approve -> Deposit (standard ERC-20 flow)
  * - Full transaction verification at each step
  * - Real-time SSE event emission for UI synchronization
  * 
  * USE CASE: Production demo with limited funds (~$15 total)
+ * 
+ * @deprecated Use executeInvestmentSequence from smartInvestTools.ts for Fraxtal L2
  */
 async function executeRealMicroInvestmentFn() {
   const broadcast = globalBroadcaster; // Use global broadcaster if set
-  console.log("\n🎯 ====== MICRO-INVESTMENT PROTOCOL ======");
+  console.log("\n🎯 ====== MICRO-INVESTMENT PROTOCOL (V2) ======");
   console.log("💰 Target: 0.0001 frxETH (~$0.35)");
-  console.log("🛡️ Safety: Preserving gas for future operations");
+  console.log("🛡️ Safety: 2-step ERC-20 approval + deposit");
   
   // ========================================================================
-  // SAFETY CHECK: Verify Agent Wallet Has Sufficient Balance
+  // SAFETY CHECK: Verify Agent Wallet Is Initialized
   // ========================================================================
   if (!agentAccount || !walletClient) {
     return JSON.stringify({
@@ -159,96 +197,86 @@ async function executeRealMicroInvestmentFn() {
   }
 
   try {
-    // Get current frxETH balance
-    const currentBalance = await publicClient.getBalance({
+    // ========================================================================
+    // STEP 0: CHECK GAS BALANCE (Native FRAX)
+    // ========================================================================
+    const gasBalance = await publicClient.getBalance({
       address: agentAccount.address,
     });
 
-    const MIN_BALANCE = parseEther("0.002"); // Must have at least 0.002 frxETH
-    const INVEST_AMOUNT = parseEther("0.0001"); // Invest exactly 0.0001 frxETH
+    const MIN_GAS_BALANCE = parseEther("0.01"); // Need at least 0.01 FRAX for gas
+    
+    console.log(`⛽ Gas Balance (Native FRAX): ${formatEther(gasBalance)} FRAX`);
+    console.log(`🔒 Minimum Gas Required: ${formatEther(MIN_GAS_BALANCE)} FRAX`);
 
-    console.log(`💰 Current Balance: ${formatEther(currentBalance)} frxETH`);
-    console.log(`🔒 Minimum Required: ${formatEther(MIN_BALANCE)} frxETH`);
-    console.log(`📊 Investment Amount: ${formatEther(INVEST_AMOUNT)} frxETH`);
-
-    // ABORT if balance too low
-    if (currentBalance < MIN_BALANCE) {
-      console.log(`❌ INSUFFICIENT BALANCE - Need ${formatEther(MIN_BALANCE - currentBalance)} more frxETH`);
+    if (gasBalance < MIN_GAS_BALANCE) {
+      console.log(`❌ INSUFFICIENT GAS - Need ${formatEther(MIN_GAS_BALANCE - gasBalance)} more FRAX`);
       
       return JSON.stringify({
-        status: "INSUFFICIENT_BALANCE",
-        error: "Balance too low for safe micro-investment",
-        current_balance: formatEther(currentBalance),
-        minimum_required: formatEther(MIN_BALANCE),
-        shortfall: formatEther(MIN_BALANCE - currentBalance),
+        status: "INSUFFICIENT_GAS",
+        error: "Not enough FRAX for gas fees",
+        gas_balance: formatEther(gasBalance),
+        minimum_required: formatEther(MIN_GAS_BALANCE),
+        shortfall: formatEther(MIN_GAS_BALANCE - gasBalance),
       }, null, 2);
     }
 
-    console.log("✅ Balance check passed - Proceeding with micro-investment\n");
+    console.log("✅ Gas check passed\n");
 
     // ========================================================================
-    // STEP 1: WRAP frxETH → wfrxETH
+    // STEP 1: CHECK frxETH BALANCE (ERC-20 Investment Token)
     // ========================================================================
-    console.log("📦 STEP 1/3: Wrapping 0.0001 frxETH → wfrxETH...");
-    
-    // Emit SSE: Wrap started
-    if (broadcast) {
-      broadcast({
-        type: "funding_update",
-        status: "WRAP_START",
-        message: "📦 Step 1/3: Wrapping 0.0001 frxETH → wfrxETH...",
-        timestamp: new Date().toISOString(),
-      });
-    }
-    
-    const wrapTx = await walletClient.sendTransaction({
-      to: WFRXETH_CONTRACT,
-      value: INVEST_AMOUNT,
-      data: "0xd0e30db0", // deposit() function signature
-    });
+    const frxethBalance = await publicClient.readContract({
+      address: FRXETH_TOKEN,
+      abi: [{
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      }],
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint;
 
-    console.log(`⏳ Wrap TX sent: ${wrapTx}`);
-    console.log(`🔗 Explorer: https://fraxscan.com/tx/${wrapTx}`);
-    
-    const wrapReceipt = await publicClient.waitForTransactionReceipt({
-      hash: wrapTx,
-    });
+    const INVEST_AMOUNT = parseEther("0.0001"); // Invest exactly 0.0001 frxETH
 
-    if (wrapReceipt.status === "reverted") {
-      throw new Error("Wrap transaction reverted - Check contract address");
-    }
+    console.log(`💰 frxETH Balance (ERC-20): ${formatEther(frxethBalance)} frxETH`);
+    console.log(`� Investment Amount: ${formatEther(INVEST_AMOUNT)} frxETH`);
 
-    console.log(`✅ Step 1 Complete - Block ${wrapReceipt.blockNumber}`);
-    console.log(`⛽ Gas Used: ${wrapReceipt.gasUsed.toString()}\n`);
-    
-    // Emit SSE: Wrap completed
-    if (broadcast) {
-      broadcast({
-        type: "funding_update",
-        status: "WRAP_COMPLETE",
-        tx: wrapTx,
-        message: `✅ Step 1 Complete - Block ${wrapReceipt.blockNumber}`,
-        timestamp: new Date().toISOString(),
-      });
+    // ABORT if not enough frxETH tokens
+    if (frxethBalance < INVEST_AMOUNT) {
+      console.log(`❌ INSUFFICIENT frxETH - Need ${formatEther(INVEST_AMOUNT - frxethBalance)} more`);
+      
+      return JSON.stringify({
+        status: "INSUFFICIENT_CAPITAL",
+        error: "Not enough frxETH tokens to invest",
+        frxeth_balance: formatEther(frxethBalance),
+        investment_amount: formatEther(INVEST_AMOUNT),
+        shortfall: formatEther(INVEST_AMOUNT - frxethBalance),
+        note: "frxETH is an ERC-20 token. You need to hold frxETH tokens to stake.",
+      }, null, 2);
     }
 
+    console.log("✅ Capital check passed - Proceeding with micro-investment\n");
+
     // ========================================================================
-    // STEP 2: APPROVE wfrxETH for sfrxETH vault
+    // STEP 1/2: APPROVE frxETH for sfrxETH vault
     // ========================================================================
-    console.log("🔐 STEP 2/3: Approving sfrxETH vault to spend 0.0001 wfrxETH...");
+    console.log("🔐 STEP 1/2: Approving sfrxETH vault to spend 0.0001 frxETH...");
     
     // Emit SSE: Approve started
     if (broadcast) {
       broadcast({
         type: "funding_update",
         status: "APPROVE_START",
-        message: "🔐 Step 2/3: Approving sfrxETH vault to spend wfrxETH...",
+        message: "🔐 Step 1/2: Approving sfrxETH vault to spend frxETH...",
         timestamp: new Date().toISOString(),
       });
     }
     
     const approveTx = await walletClient.writeContract({
-      address: WFRXETH_CONTRACT as `0x${string}`,
+      address: FRXETH_TOKEN as `0x${string}`,
       abi: [{
         name: 'approve',
         type: 'function',
@@ -271,10 +299,10 @@ async function executeRealMicroInvestmentFn() {
     });
 
     if (approveReceipt.status === "reverted") {
-      throw new Error("Approval transaction reverted - Check wfrxETH balance");
+      throw new Error("Approval transaction reverted - Check frxETH balance");
     }
 
-    console.log(`✅ Step 2 Complete - Block ${approveReceipt.blockNumber}`);
+    console.log(`✅ Step 1 Complete - Block ${approveReceipt.blockNumber}`);
     console.log(`⛽ Gas Used: ${approveReceipt.gasUsed.toString()}\n`);
     
     // Emit SSE: Approve completed
@@ -283,22 +311,22 @@ async function executeRealMicroInvestmentFn() {
         type: "funding_update",
         status: "APPROVE_COMPLETE",
         tx: approveTx,
-        message: `✅ Step 2 Complete - Block ${approveReceipt.blockNumber}`,
+        message: `✅ Step 1 Complete - Block ${approveReceipt.blockNumber}`,
         timestamp: new Date().toISOString(),
       });
     }
 
     // ========================================================================
-    // STEP 3: DEPOSIT wfrxETH into sfrxETH vault
+    // STEP 2/2: DEPOSIT frxETH into sfrxETH vault
     // ========================================================================
-    console.log("💎 STEP 3/3: Depositing 0.0001 wfrxETH into sfrxETH vault...");
+    console.log("💎 STEP 2/2: Depositing 0.0001 frxETH into sfrxETH vault...");
     
     // Emit SSE: Stake started
     if (broadcast) {
       broadcast({
         type: "funding_update",
         status: "STAKE_START",
-        message: "💎 Step 3/3: Depositing into sfrxETH vault...",
+        message: "💎 Step 2/2: Staking into sfrxETH vault...",
         timestamp: new Date().toISOString(),
       });
     }
@@ -330,7 +358,7 @@ async function executeRealMicroInvestmentFn() {
       throw new Error("Deposit transaction reverted - Check approval");
     }
 
-    console.log(`✅ Step 3 Complete - Block ${depositReceipt.blockNumber}`);
+    console.log(`✅ Step 2 Complete - Block ${depositReceipt.blockNumber}`);
     console.log(`⛽ Gas Used: ${depositReceipt.gasUsed.toString()}`);
     
     // Emit SSE: Stake completed
@@ -339,15 +367,30 @@ async function executeRealMicroInvestmentFn() {
         type: "funding_update",
         status: "STAKE_COMPLETE",
         tx: depositTx,
-        message: `✅ Step 3 Complete - Staked in sfrxETH vault!`,
+        message: `✅ Step 2 Complete - Staked in sfrxETH vault!`,
         timestamp: new Date().toISOString(),
       });
-    }    // ========================================================================
+    }
+
+    // ========================================================================
     // FINAL: Get updated balances
     // ========================================================================
-    const finalBalance = await publicClient.getBalance({
+    const finalGasBalance = await publicClient.getBalance({
       address: agentAccount.address,
     });
+
+    const finalFrxethBalance = await publicClient.readContract({
+      address: FRXETH_TOKEN,
+      abi: [{
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      }],
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint;
 
     const sfrxethBalance = await publicClient.readContract({
       address: SFRXETH_CONTRACT,
@@ -362,12 +405,13 @@ async function executeRealMicroInvestmentFn() {
       args: [agentAccount.address],
     }) as bigint;
 
-    const totalGasUsed = wrapReceipt.gasUsed + approveReceipt.gasUsed + depositReceipt.gasUsed;
+    const totalGasUsed = approveReceipt.gasUsed + depositReceipt.gasUsed;
 
     console.log("\n🎉 ====== MICRO-INVESTMENT COMPLETE ======");
     console.log(`💰 Invested: ${formatEther(INVEST_AMOUNT)} frxETH`);
     console.log(`🏦 sfrxETH Balance: ${formatEther(sfrxethBalance)}`);
-    console.log(`💵 Remaining frxETH: ${formatEther(finalBalance)}`);
+    console.log(`💵 Remaining frxETH: ${formatEther(finalFrxethBalance)}`);
+    console.log(`⛽ Remaining Gas (FRAX): ${formatEther(finalGasBalance)}`);
     console.log(`⛽ Total Gas Used: ${totalGasUsed.toString()}`);
     console.log(`📊 Now Earning: 5-10% APY on ${formatEther(sfrxethBalance)} sfrxETH`);
     console.log("==========================================\n");
@@ -376,12 +420,6 @@ async function executeRealMicroInvestmentFn() {
       status: "SUCCESS",
       invested_amount: formatEther(INVEST_AMOUNT),
       transactions: {
-        wrap: {
-          hash: wrapTx,
-          block: wrapReceipt.blockNumber.toString(),
-          gas_used: wrapReceipt.gasUsed.toString(),
-          explorer: `https://fraxscan.com/tx/${wrapTx}`,
-        },
         approve: {
           hash: approveTx,
           block: approveReceipt.blockNumber.toString(),
@@ -397,11 +435,11 @@ async function executeRealMicroInvestmentFn() {
       },
       balances: {
         sfrxeth: formatEther(sfrxethBalance),
-        frxeth_remaining: formatEther(finalBalance),
+        frxeth_remaining: formatEther(finalFrxethBalance),
+        gas_frax_remaining: formatEther(finalGasBalance),
       },
       gas: {
         total_gas_used: totalGasUsed.toString(),
-        wrap_gas: wrapReceipt.gasUsed.toString(),
         approve_gas: approveReceipt.gasUsed.toString(),
         deposit_gas: depositReceipt.gasUsed.toString(),
       },
@@ -420,7 +458,8 @@ async function executeRealMicroInvestmentFn() {
       error: error.message,
       details: error.toString(),
       troubleshooting: [
-        "Check agent has sufficient frxETH balance (min 0.002)",
+        "Check agent has sufficient FRAX for gas (min 0.01)",
+        "Check agent has sufficient frxETH tokens (min 0.0001)",
         "Verify contract addresses are correct",
         "Ensure network is Fraxtal (Chain ID 252)",
         "Check gas price is not too high",
@@ -435,16 +474,20 @@ export const execute_real_micro_investment = createTool({
   description: `
     Execute a SAFE micro-investment of 0.0001 frxETH into sfrxETH vault.
     
+    FRAXTAL V2 ARCHITECTURE:
+    - Native Gas: FRAX (for transaction fees)
+    - Investment: frxETH (ERC-20 token)
+    - Target Vault: sfrxETH (ERC-4626)
+    
     SAFETY FEATURES:
     - Hardcoded 0.0001 frxETH amount (~$0.35)
-    - Requires minimum 0.002 frxETH balance
-    - Preserves funds for gas
+    - Requires minimum 0.01 FRAX for gas
+    - Requires minimum 0.0001 frxETH (ERC-20) tokens
     - Full transaction verification
     
-    PROCESS:
-    1. Wrap 0.0001 frxETH → wfrxETH
-    2. Approve wfrxETH for vault
-    3. Deposit into sfrxETH vault
+    PROCESS (2-Step ERC-20 Flow):
+    1. Approve frxETH for sfrxETH vault
+    2. Deposit frxETH into vault
     
     USE CASE:
     Production demo with limited funds (~$15 wallet).

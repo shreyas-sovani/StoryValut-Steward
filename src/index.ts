@@ -20,7 +20,7 @@ async function main() {
 
   // Build the agent using ADK AgentBuilder pattern
   const { runner } = await AgentBuilder.create("StorySteward")
-    .withModel("gemini-2.0-flash-lite")
+    .withModel("gemini-2.0-flash")  // Full 2.0-flash has higher limits than 2.0-flash-lite
     .withInstruction(
       `You are the StoryVault Steward - a DeFi Curator specializing in narrative-driven wealth preservation on the Fraxtal network.
 

@@ -11,6 +11,12 @@ import {
   executeRealMicroInvestmentFn,
   setSSEBroadcaster 
 } from "./tools/executionTools.js";
+import {
+  executeInvestmentSequence,
+  setSmartInvestBroadcaster,
+  strategyManager,
+} from "./tools/smartInvestTools.js";
+import { parseEther, formatEther } from "viem";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -87,6 +93,9 @@ function broadcastFundingUpdate(eventData: {
 // Register the SSE broadcaster with executionTools (for real-time event emission)
 setSSEBroadcaster(broadcastFundingUpdate);
 
+// Register the SSE broadcaster with smartInvestTools (for Smart Invest workflow)
+setSmartInvestBroadcaster(broadcastFundingUpdate);
+
 // CORS configuration for frontend
 // Allow localhost (development) and Vercel (production)
 const allowedOrigins = [
@@ -98,21 +107,25 @@ const allowedOrigins = [
   "https://story-valut-steward-snmf.vercel.app",  // Current Vercel deployment
 ];
 
+// Helper function to check if origin is allowed
+function isOriginAllowed(origin: string | undefined): string {
+  if (!origin) return "*";
+  
+  const isAllowed = allowedOrigins.some((pattern) => {
+    if (typeof pattern === "string") return pattern === origin;
+    if (pattern instanceof RegExp) return pattern.test(origin);
+    return false;
+  });
+  
+  return isAllowed ? origin : allowedOrigins[0] as string;
+}
+
 app.use("/*", cors({
-  origin: (origin) => {
-    // Allow requests with no origin (like mobile apps, curl, Postman)
-    if (!origin) return "*";
-    
-    // Check if origin matches any allowed pattern
-    const isAllowed = allowedOrigins.some((pattern) => {
-      if (typeof pattern === "string") return pattern === origin;
-      if (pattern instanceof RegExp) return pattern.test(origin);
-      return false;
-    });
-    
-    return isAllowed ? origin : allowedOrigins[0] as string;
-  },
+  origin: (origin) => isOriginAllowed(origin),
   credentials: true,
+  allowHeaders: ["Content-Type", "Authorization", "Accept", "Cache-Control"],
+  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  exposeHeaders: ["Content-Type", "Cache-Control", "Connection"],
 }));
 
 // Health check endpoint
@@ -264,6 +277,129 @@ app.get("/api/sessions", (c) => {
 });
 
 // ============================================================================
+// SMART INVEST STRATEGY ENDPOINTS
+// ============================================================================
+
+// GET /api/strategy/:address - Get user's investment strategy
+app.get("/api/strategy/:address", (c) => {
+  const address = c.req.param("address");
+  
+  try {
+    const strategy = strategyManager.getStrategy(address);
+    return c.json({
+      stablePercent: strategy.stablePercent,
+      volatilePercent: strategy.volatilePercent,
+      name: strategy.name,
+      address,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error getting strategy:", error);
+    return c.json(
+      { error: "Failed to get strategy", details: error instanceof Error ? error.message : "Unknown error" },
+      500
+    );
+  }
+});
+
+// POST /api/strategy/:address - Set user's investment strategy
+app.post("/api/strategy/:address", async (c) => {
+  const address = c.req.param("address");
+  
+  try {
+    const body = await c.req.json();
+    const { stablePercent, volatilePercent } = body;
+    
+    // Validate input
+    if (typeof stablePercent !== "number" || typeof volatilePercent !== "number") {
+      return c.json({ error: "stablePercent and volatilePercent must be numbers" }, 400);
+    }
+    
+    if (stablePercent + volatilePercent !== 100) {
+      return c.json({ error: "stablePercent + volatilePercent must equal 100" }, 400);
+    }
+    
+    if (stablePercent < 0 || stablePercent > 100 || volatilePercent < 0 || volatilePercent > 100) {
+      return c.json({ error: "Percentages must be between 0 and 100" }, 400);
+    }
+    
+    // Update strategy
+    strategyManager.setStrategy(address, stablePercent, volatilePercent);
+    
+    console.log(`📊 Strategy updated for ${address}: ${stablePercent}% stable / ${volatilePercent}% volatile`);
+    
+    return c.json({
+      success: true,
+      stablePercent,
+      volatilePercent,
+      address,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error setting strategy:", error);
+    return c.json(
+      { error: "Failed to set strategy", details: error instanceof Error ? error.message : "Unknown error" },
+      500
+    );
+  }
+});
+
+// POST /api/smart-invest - Manual trigger for smart invest (testing)
+app.post("/api/smart-invest", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { walletAddress, testMode } = body;
+    
+    // Get agent wallet to check balance
+    const walletResult = await getAgentWalletFn();
+    const walletData = JSON.parse(walletResult);
+    
+    if (!walletData.execution_capable) {
+      return c.json({ error: "Agent wallet not configured for execution" }, 400);
+    }
+    
+    const fraxBalance = parseFloat(walletData.balances.FRAX_native || "0");
+    
+    // Allow test mode to proceed even with low balance (for demo)
+    if (fraxBalance < 0.1 && !testMode) {
+      return c.json({ 
+        error: "Insufficient FRAX balance for smart invest. Deposit FRAX to agent wallet first.", 
+        balance: fraxBalance,
+        agentWallet: walletData.address,
+        hint: "Send FRAX to the agent wallet address to enable auto-investment"
+      }, 400);
+    }
+    
+    // If test mode with low balance, just return success without executing
+    if (testMode && fraxBalance < 0.1) {
+      return c.json({
+        success: true,
+        testMode: true,
+        message: "Test mode - would execute investment with sufficient balance",
+        currentBalance: fraxBalance,
+        agentWallet: walletData.address,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    
+    // Trigger investment sequence
+    const result = await executeInvestmentSequence(walletData.address, parseEther(fraxBalance.toString()));
+    
+    return c.json({
+      success: result.status === "SUCCESS",
+      result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error triggering smart invest:", error);
+    return c.json(
+      { error: "Failed to trigger smart invest", details: error instanceof Error ? error.message : "Unknown error" },
+      500
+    );
+  }
+});
+
+// ============================================================================
 // PHASE 8: AUTONOMOUS HEDGE FUND ENDPOINTS
 // ============================================================================
 
@@ -337,6 +473,14 @@ app.post("/api/test/trigger-investment", (c) => {
 
 // GET /api/watcher/logs/stream - SSE stream for live logs
 app.get("/api/watcher/logs/stream", (c) => {
+  // Set explicit SSE headers
+  c.header("Content-Type", "text/event-stream");
+  c.header("Cache-Control", "no-cache");
+  c.header("Connection", "keep-alive");
+  c.header("Access-Control-Allow-Origin", isOriginAllowed(c.req.header("origin")));
+  c.header("Access-Control-Allow-Credentials", "true");
+  c.header("X-Accel-Buffering", "no"); // Disable nginx buffering
+  
   return streamSSE(c, async (stream) => {
     console.log("📡 Client connected to watcher log stream");
     
@@ -348,29 +492,50 @@ app.get("/api/watcher/logs/stream", (c) => {
       });
     }
     
-    // Keep connection alive and send new logs
-    // In a real implementation, you'd use an event emitter pattern
-    // For now, we'll just keep the connection open
-    const interval = setInterval(async () => {
-      if (watcherLogs.length > 0) {
-        const lastLog = watcherLogs[watcherLogs.length - 1];
-        await stream.writeSSE({
-          data: JSON.stringify(lastLog),
-          event: "log",
-        });
-      }
-    }, 1000);
-    
-    // Cleanup on disconnect
+    let isConnected = true;
     c.req.raw.signal.addEventListener("abort", () => {
-      clearInterval(interval);
+      isConnected = false;
       console.log("📡 Client disconnected from watcher log stream");
     });
+    
+    // Keep connection alive with heartbeats every 15 seconds
+    let lastLogCount = watcherLogs.length;
+    while (isConnected) {
+      try {
+        await stream.sleep(1000); // Check every 1 second for new logs
+        
+        if (!isConnected) break;
+        
+        // Send any new logs
+        if (watcherLogs.length > lastLogCount) {
+          const newLogs = watcherLogs.slice(lastLogCount);
+          for (const log of newLogs) {
+            await stream.writeSSE({
+              data: JSON.stringify(log),
+              event: "log",
+            });
+          }
+          lastLogCount = watcherLogs.length;
+        }
+      } catch (error) {
+        console.error("Error in watcher log stream:", error);
+        isConnected = false;
+        break;
+      }
+    }
   });
 });
 
 // GET /api/funding/stream - SSE stream for real-time funding updates
 app.get("/api/funding/stream", (c) => {
+  // Set explicit SSE headers BEFORE streaming
+  c.header("Content-Type", "text/event-stream");
+  c.header("Cache-Control", "no-cache");
+  c.header("Connection", "keep-alive");
+  c.header("Access-Control-Allow-Origin", isOriginAllowed(c.req.header("origin")));
+  c.header("Access-Control-Allow-Credentials", "true");
+  c.header("X-Accel-Buffering", "no"); // Disable nginx buffering
+  
   return streamSSE(c, async (stream) => {
     const clientId = Math.random().toString(36).substring(7);
     console.log(`📡 Client ${clientId} connected to funding stream`);
@@ -378,11 +543,13 @@ app.get("/api/funding/stream", (c) => {
     // Add client to SSE clients list
     sseClients.push({ id: clientId, stream });
     
-    // Send initial status
+    // Send initial connection confirmation
     await stream.writeSSE({
       data: JSON.stringify({
-        type: "funding_update",
-        status: "WAITING",
+        type: "connected",
+        status: "CONNECTED",
+        clientId,
+        message: "SSE connection established successfully",
         timestamp: new Date().toISOString(),
       }),
       event: "funding_update",
@@ -401,15 +568,20 @@ app.get("/api/funding/stream", (c) => {
       console.log(`📡 Client ${clientId} disconnected from funding stream (${sseClients.length} remaining)`);
     });
     
-    // Keep connection alive with heartbeats - use a while loop
+    // Keep connection alive with heartbeats every 15 seconds
     while (isConnected) {
       try {
-        await stream.sleep(30000); // Sleep for 30 seconds
+        await stream.sleep(15000); // Sleep for 15 seconds (per audit requirement)
         
         if (!isConnected) break;
         
+        // Send SSE comment as keepalive (browsers recognize this)
         await stream.writeSSE({
-          data: JSON.stringify({ type: "heartbeat", timestamp: new Date().toISOString() }),
+          data: JSON.stringify({ 
+            type: "heartbeat", 
+            timestamp: new Date().toISOString(),
+            clients: sseClients.length 
+          }),
           event: "heartbeat",
         });
         console.log(`💓 Heartbeat sent to client ${clientId}`);
@@ -425,8 +597,16 @@ app.get("/api/funding/stream", (c) => {
 });
 
 // ============================================================================
-// AUTONOMOUS WATCHER LOOP (Phase 8 - The "Demo God Mode")
+// AUTONOMOUS WATCHER LOOP (Phase 9 - Smart Invest Edition)
 // ============================================================================
+// Modes:
+// 1. SMART_INVEST: When native FRAX is deposited, split and invest based on strategy
+// 2. LEGACY_MICRO: When frxETH is deposited, stake directly into sfrxETH
+// ============================================================================
+
+// Configuration: Set to true for Smart Invest (FRAX deposits), false for legacy micro-investment
+const USE_SMART_INVEST = true;
+let lastKnownFraxBalance = "0"; // Track native FRAX balance for Smart Invest mode
 
 async function autonomousWatcherLoop() {
   try {
@@ -435,121 +615,138 @@ async function autonomousWatcherLoop() {
     const walletData = JSON.parse(walletResult);
     
     if (walletData.execution_capable) {
-      // UPDATED: Use frxETH (ERC20) balance - this is what we can stake in sfrxETH
-      // FRAX_native is the gas token but needs to be swapped to frxETH first
       const frxethBalance = parseFloat(walletData.balances.frxETH || "0");
       const fraxBalance = parseFloat(walletData.balances.FRAX_native || "0");
       
       // DEBUG: Log balance check details
-      console.log(`[WATCHER DEBUG] Native FRAX balance: ${fraxBalance.toFixed(6)}`);
-      console.log(`[WATCHER DEBUG] frxETH (ERC20) balance: ${frxethBalance.toFixed(6)}`);
-      console.log(`[WATCHER DEBUG] Last known frxETH: ${lastKnownBalance}`);
-      console.log(`[WATCHER DEBUG] Balance increased: ${frxethBalance > parseFloat(lastKnownBalance)}`);
-      console.log(`[WATCHER DEBUG] Above micro-threshold (0.0001): ${frxethBalance > 0.0001}`);
-      console.log(`[WATCHER DEBUG] Not investing: ${!isInvesting}`);
-      console.log(`[WATCHER DEBUG] Investment executed flag: ${investmentExecuted}`);
-      
-      // CRITICAL FIX: Initialize lastKnownBalance on first run
-      if (lastKnownBalance === "0" && frxethBalance > 0) {
-        lastKnownBalance = frxethBalance.toString();
-        addWatcherLog("info", `🔄 Server started: Tracking existing balance of ${frxethBalance.toFixed(6)} frxETH (no auto-invest on restart)`);
-        console.log(`[WATCHER DEBUG] Initialized lastKnownBalance to: ${lastKnownBalance}`);
-      }
-      
-      // Step 2: MICRO-INVESTMENT Rule (0.0001 frxETH minimum, ONE-TIME ONLY)
-      // Only invest if:
-      // 1. Balance increased from last known
-      // 2. Above micro-threshold (0.0001 frxETH)
-      // 3. Not currently investing
-      // 4. Haven't already invested (ONE-TIME FLAG)
-      if (
-        frxethBalance > 0.0001 && 
-        frxethBalance > parseFloat(lastKnownBalance) && 
-        !isInvesting && 
-        !investmentExecuted
-      ) {
-        isInvesting = true; // Set flag immediately to prevent concurrent investments
+      console.log(`[WATCHER DEBUG] Native FRAX: ${fraxBalance.toFixed(6)} | frxETH: ${frxethBalance.toFixed(6)}`);
+      console.log(`[WATCHER DEBUG] Smart Invest Mode: ${USE_SMART_INVEST} | Investing: ${isInvesting} | Executed: ${investmentExecuted}`);
+
+      // ======================================================================
+      // SMART INVEST MODE: Detect native FRAX deposits
+      // ======================================================================
+      if (USE_SMART_INVEST) {
+        // Initialize lastKnownFraxBalance on first run
+        if (lastKnownFraxBalance === "0" && fraxBalance > 0) {
+          lastKnownFraxBalance = fraxBalance.toString();
+          addWatcherLog("info", `🔄 Tracking FRAX: ${fraxBalance.toFixed(6)} (no auto-invest on restart)`);
+        }
+
+        // Detect FRAX deposit and trigger Smart Invest
+        const fraxIncreased = fraxBalance > parseFloat(lastKnownFraxBalance);
+        const aboveThreshold = fraxBalance > 0.2;
         
-        const depositAmount = frxethBalance - parseFloat(lastKnownBalance);
-        lastKnownBalance = frxethBalance.toString(); // Update balance BEFORE investing
-        
-        console.log(`[WATCHER] 🎉 DEPOSIT DETECTED! Amount: +${depositAmount.toFixed(6)} frxETH`);
-        addWatcherLog("success", `💰 NEW CAPITAL DETECTED: +${depositAmount.toFixed(6)} frxETH (Total: ${frxethBalance.toFixed(6)})`);
-        
-        // Broadcast deposit detected
-        broadcastFundingUpdate({
-          type: "funding_update",
-          status: "DEPOSIT_DETECTED",
-          amount: frxethBalance.toFixed(6),
-          timestamp: new Date().toISOString(),
-        });
-        
-        addWatcherLog("info", "🤖 MICRO-INVESTMENT PROTOCOL: Executing 0.0001 frxETH stake...");
-        
-        try {
-          // Execute MICRO-INVESTMENT (0.0001 frxETH only)
-          const investResult = await executeRealMicroInvestmentFn();
+        if (fraxIncreased && aboveThreshold && !isInvesting && !investmentExecuted) {
+          isInvesting = true;
+          const depositAmount = fraxBalance - parseFloat(lastKnownFraxBalance);
+          const previousBalance = lastKnownFraxBalance;
+          lastKnownFraxBalance = fraxBalance.toString();
           
-          const investData = JSON.parse(investResult);
-          if (investData.status === "SUCCESS") {
-            addWatcherLog("success", `✅ MICRO-INVESTMENT COMPLETE!`);
-            addWatcherLog("success", `📦 Wrap TX: ${investData.transactions.wrap.hash}`);
-            addWatcherLog("success", `🔐 Approve TX: ${investData.transactions.approve.hash}`);
-            addWatcherLog("success", `💎 Deposit TX: ${investData.transactions.deposit.hash}`);
-            addWatcherLog("info", `💰 Invested: ${investData.invested_amount} frxETH`);
-            addWatcherLog("info", `🏦 sfrxETH Balance: ${investData.balances.sfrxeth}`);
-            addWatcherLog("info", `� Now Earning: ${investData.yield.expected_apy} APY`);
+          addWatcherLog("success", `💰 FRAX DETECTED: +${depositAmount.toFixed(6)} (Total: ${fraxBalance.toFixed(6)})`);
+          
+          // === BROADCAST: DEPOSIT_DETECTED (Step 0 - Trigger UI activation) ===
+          broadcastFundingUpdate({
+            type: "DEPOSIT_DETECTED",
+            status: "DEPOSIT_DETECTED",
+            amount: fraxBalance.toFixed(6),
+            message: `Detected ${depositAmount.toFixed(6)} FRAX deposit. Starting Smart Invest sequence...`,
+            timestamp: new Date().toISOString(),
+          });
+          
+          const userStrategy = strategyManager.getStrategy(walletData.address);
+          addWatcherLog("info", `📊 Strategy: ${userStrategy.name} (${userStrategy.stablePercent}%/${userStrategy.volatilePercent}%)`);
+          
+          try {
+            const result = await executeInvestmentSequence(walletData.address, parseEther(fraxBalance.toString()));
             
-            // SET ONE-TIME FLAG: Never invest again automatically
-            investmentExecuted = true;
-            console.log(`[WATCHER] ✅ ONE-TIME INVESTMENT COMPLETED - Flag set to prevent re-investment`);
+            if (result.status === "SUCCESS") {
+              addWatcherLog("success", `✅ SMART INVEST COMPLETE!`);
+              addWatcherLog("info", `💵 Stable: ${result.allocation.stableAmount} → sfrxUSD (~5% APY)`);
+              addWatcherLog("info", `📈 Volatile: ${result.allocation.volatileAmount} → sfrxETH (~8-12% APY)`);
+              Object.entries(result.transactions).forEach(([key, tx]) => {
+                if (tx && typeof tx === 'object' && 'hash' in tx) {
+                  addWatcherLog("success", `🔗 ${key}: ${(tx as any).hash}`);
+                }
+              });
+              investmentExecuted = true;
+              
+              // === BROADCAST: INVESTMENT_COMPLETE (Final event) ===
+              broadcastFundingUpdate({
+                type: "INVESTMENT_COMPLETE",
+                status: "INVESTED",
+                amount: result.allocation.investableAmount,
+                message: `Smart Invest complete! ${result.strategy.stablePercent}% sfrxUSD (~5% APY), ${result.strategy.volatilePercent}% sfrxETH (~8-12% APY)`,
+                timestamp: new Date().toISOString(),
+              });
+            } else {
+              addWatcherLog("warning", `⚠️ ${result.status}: ${result.error || 'Unknown error'}`);
+              lastKnownFraxBalance = previousBalance;
+              
+              // === BROADCAST: FAILED ===
+              broadcastFundingUpdate({
+                type: "log",
+                status: "Failed",
+                message: `Smart Invest failed: ${result.error || result.status}`,
+                timestamp: new Date().toISOString(),
+              });
+            }
+          } catch (error) {
+            addWatcherLog("critical", `❌ SMART INVEST FAILED: ${error}`);
+            lastKnownFraxBalance = previousBalance;
             
-            // Broadcast invested
+            // === BROADCAST: FAILED ===
             broadcastFundingUpdate({
-              type: "funding_update",
-              status: "INVESTED",
-              amount: investData.invested_amount,
-              tx: investData.transactions.deposit.hash,
+              type: "log",
+              status: "Failed",
+              message: `Smart Invest failed: ${error instanceof Error ? error.message : String(error)}`,
               timestamp: new Date().toISOString(),
             });
-          } else if (investData.status === "INSUFFICIENT_BALANCE") {
-            addWatcherLog("warning", `⚠️ Balance too low for micro-investment (need 0.002 frxETH minimum)`);
-            addWatcherLog("info", `💡 Current: ${investData.current_balance} | Required: ${investData.minimum_required}`);
-          } else {
-            addWatcherLog("warning", `⚠️ MICRO-INVESTMENT: ${investData.status}`);
+          } finally {
+            isInvesting = false;
           }
-        } catch (error) {
-          addWatcherLog("critical", `❌ MICRO-INVESTMENT FAILED: ${error}`);
-          console.error("[WATCHER ERROR]", error);
-        } finally {
-          isInvesting = false; // Release flag after investment completes or fails
+        } else if (investmentExecuted && Math.random() < 0.1) {
+          addWatcherLog("info", `✅ Invested | FRAX: ${fraxBalance.toFixed(4)} | Earning yield`);
         }
-      } else if (investmentExecuted) {
-        // Already invested - just monitor
-        if (Math.random() < 0.1) { // Log occasionally (10% chance per cycle)
-          addWatcherLog("info", `✅ Micro-investment already executed | Balance: ${frxethBalance.toFixed(6)} frxETH`);
+      }
+      // ======================================================================
+      // LEGACY MODE: Detect frxETH deposits
+      // ======================================================================
+      else {
+        if (lastKnownBalance === "0" && frxethBalance > 0) {
+          lastKnownBalance = frxethBalance.toString();
+        }
+        
+        if (frxethBalance > 0.0001 && frxethBalance > parseFloat(lastKnownBalance) && !isInvesting && !investmentExecuted) {
+          isInvesting = true;
+          const depositAmount = frxethBalance - parseFloat(lastKnownBalance);
+          lastKnownBalance = frxethBalance.toString();
+          
+          addWatcherLog("success", `� frxETH DETECTED: +${depositAmount.toFixed(6)}`);
+          broadcastFundingUpdate({ type: "funding_update", status: "DEPOSIT_DETECTED", amount: frxethBalance.toFixed(6), timestamp: new Date().toISOString() });
+          
+          try {
+            const investResult = await executeRealMicroInvestmentFn();
+            const investData = JSON.parse(investResult);
+            if (investData.status === "SUCCESS") {
+              addWatcherLog("success", `✅ MICRO-INVEST COMPLETE: ${investData.invested_amount} frxETH → sfrxETH`);
+              investmentExecuted = true;
+              broadcastFundingUpdate({ type: "funding_update", status: "INVESTED", amount: investData.invested_amount, tx: investData.transactions.deposit.hash, timestamp: new Date().toISOString() });
+            }
+          } catch (error) {
+            addWatcherLog("critical", `❌ MICRO-INVEST FAILED: ${error}`);
+          } finally {
+            isInvesting = false;
+          }
         }
       }
       
-      // Step 3: PROTECTION Rule (Emergency Evacuation - NOT USED for micro-investment)
-      // Keep this disabled for micro-investment demo to preserve funds
-      if (current_yield < 1.0 && !isEvacuating) {
-        addWatcherLog("warning", `⚠️ Low yield detected: ${current_yield}% (Emergency evacuation disabled for micro-investment demo)`);
+      // Monitoring
+      if (Math.random() < 0.15) {
+        addWatcherLog("info", `📊 ${fraxBalance.toFixed(4)} FRAX | ${frxethBalance.toFixed(6)} frxETH | Yield: ${current_yield}%`);
       }
-      
-      // Step 4: Regular monitoring log
-      if (frxethBalance === 0) {
-        addWatcherLog("info", "👀 Monitoring: Waiting for capital deposit...");
-      } else if (Math.random() < 0.2) { // Log occasionally (20% chance per cycle)
-        addWatcherLog("info", `📊 Monitoring: ${frxethBalance.toFixed(6)} frxETH | Yield: ${current_yield}%`);
-      }
-    } else {
-      // Demo mode
-      if (Math.random() < 0.2) { // Log occasionally
-        addWatcherLog("info", `📊 DEMO MODE: Yield ${current_yield}% | Set AGENT_PRIVATE_KEY for live execution`);
-      }
+    } else if (Math.random() < 0.2) {
+      addWatcherLog("info", `📊 DEMO MODE: Set AGENT_PRIVATE_KEY for live execution`);
     }
-    
   } catch (error) {
     console.error("❌ Watcher loop error:", error);
     addWatcherLog("warning", `⚠️ Watcher error: ${error instanceof Error ? error.message : "Unknown"}`);
