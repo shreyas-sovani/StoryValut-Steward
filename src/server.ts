@@ -8,7 +8,8 @@ import {
   execute_strategy, 
   getAgentWalletFn, 
   executeStrategyFn,
-  executeRealMicroInvestmentFn 
+  executeRealMicroInvestmentFn,
+  setSSEBroadcaster 
 } from "./tools/executionTools.js";
 import dotenv from "dotenv";
 
@@ -62,10 +63,11 @@ function addWatcherLog(type: "info" | "warning" | "critical" | "success", messag
 
 // Broadcast funding events to all connected SSE clients
 function broadcastFundingUpdate(eventData: {
-  type: "funding_update";
-  status: "DEPOSIT_DETECTED" | "INVESTED" | "EVACUATED" | "WAITING";
+  type: string;
+  status: string;
   amount?: string;
   tx?: string;
+  message?: string;
   timestamp: string;
 }) {
   console.log("📡 Broadcasting funding update to", sseClients.length, "clients:", eventData);
@@ -81,6 +83,9 @@ function broadcastFundingUpdate(eventData: {
     }
   }
 }
+
+// Register the SSE broadcaster with executionTools (for real-time event emission)
+setSSEBroadcaster(broadcastFundingUpdate);
 
 // CORS configuration for frontend
 // Allow localhost (development) and Vercel (production)
@@ -309,6 +314,27 @@ app.get("/api/watcher/status", (c) => {
   });
 });
 
+// POST /api/test/trigger-investment - Force trigger investment (TEST ONLY)
+app.post("/api/test/trigger-investment", (c) => {
+  console.log("\n🧪 TEST MODE: Forcing investment trigger\n");
+  
+  // Reset the investment flag and reduce lastKnownBalance
+  investmentExecuted = false;
+  const currentBalance = lastKnownBalance;
+  lastKnownBalance = "0";
+  
+  addWatcherLog("info", `🧪 TEST: Reset investment flag and balance tracker`);
+  addWatcherLog("info", `🧪 TEST: Next watcher cycle will detect balance increase and invest`);
+  
+  return c.json({
+    status: "test_triggered",
+    message: "Investment flag reset - next cycle will execute",
+    previous_balance: currentBalance,
+    new_tracked_balance: lastKnownBalance,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // GET /api/watcher/logs/stream - SSE stream for live logs
 app.get("/api/watcher/logs/stream", (c) => {
   return streamSSE(c, async (stream) => {
@@ -409,11 +435,15 @@ async function autonomousWatcherLoop() {
     const walletData = JSON.parse(walletResult);
     
     if (walletData.execution_capable) {
+      // UPDATED: Use frxETH (ERC20) balance - this is what we can stake in sfrxETH
+      // FRAX_native is the gas token but needs to be swapped to frxETH first
       const frxethBalance = parseFloat(walletData.balances.frxETH || "0");
+      const fraxBalance = parseFloat(walletData.balances.FRAX_native || "0");
       
       // DEBUG: Log balance check details
-      console.log(`[WATCHER DEBUG] Current frxETH balance: ${frxethBalance.toFixed(6)}`);
-      console.log(`[WATCHER DEBUG] Last known balance: ${lastKnownBalance}`);
+      console.log(`[WATCHER DEBUG] Native FRAX balance: ${fraxBalance.toFixed(6)}`);
+      console.log(`[WATCHER DEBUG] frxETH (ERC20) balance: ${frxethBalance.toFixed(6)}`);
+      console.log(`[WATCHER DEBUG] Last known frxETH: ${lastKnownBalance}`);
       console.log(`[WATCHER DEBUG] Balance increased: ${frxethBalance > parseFloat(lastKnownBalance)}`);
       console.log(`[WATCHER DEBUG] Above micro-threshold (0.0001): ${frxethBalance > 0.0001}`);
       console.log(`[WATCHER DEBUG] Not investing: ${!isInvesting}`);

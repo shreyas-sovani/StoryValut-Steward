@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import ChatInterface from "@/components/ChatInterface";
 import VaultCard from "@/components/VaultCard";
-import CommandCenter from "@/components/CommandCenter";
+import CommandCenter from "@/components/CommandCenterV2";
 
 export default function Home() {
   const [vaultData, setVaultData] = useState(null);

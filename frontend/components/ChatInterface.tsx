@@ -5,7 +5,7 @@ import { Send, Loader2, Sparkles, Activity } from "lucide-react";
 import { sendChatMessage, type ChatMessage, type SSEEvent } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import OpportunityCard from "@/components/OpportunityCard";
-import CommandCenter from "@/components/CommandCenter";
+import CommandCenter from "@/components/CommandCenterV2";
 
 interface MonitoringData {
   active: boolean;
