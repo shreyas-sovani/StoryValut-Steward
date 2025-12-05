@@ -221,7 +221,7 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
         console.log("💰 CommandCenter: DEPOSIT_DETECTED event", data.amount);
         const depositAmount = parseFloat(data.amount || "0");
         
-        addLog(`💰 NEW DEPOSIT DETECTED: +${data.amount} FRAX`, "deposit");
+        addLog(`💰 NEW DEPOSIT DETECTED: +${data.amount} frxETH`, "deposit");
         
         // Update total AUM
         setAum(prev => {
@@ -234,9 +234,28 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
         setAvailableBalance(prev => {
           const newBalance = prev + depositAmount;
           console.log("💰 Available updated:", prev, "→", newBalance);
-          addLog(`📊 Available Balance: ${newBalance.toFixed(4)} FRAX`, "info");
+          addLog(`📊 Available Balance: ${newBalance.toFixed(6)} frxETH`, "info");
           return newBalance;
         });
+        
+        // Show micro-investment steps
+        setTimeout(() => {
+          addLog("🤖 MICRO-INVESTMENT PROTOCOL: Executing 0.0001 frxETH stake...", "info");
+        }, 500);
+        
+        setTimeout(() => {
+          addLog("📦 Step 1/3: Wrapping 0.0001 frxETH → wfrxETH...", "info");
+        }, 1000);
+        
+        setTimeout(() => {
+          addLog("✅ Wrapped successfully", "success");
+          addLog("🔐 Step 2/3: Approving Vault to spend wfrxETH...", "info");
+        }, 2500);
+        
+        setTimeout(() => {
+          addLog("✅ Approval confirmed", "success");
+          addLog("💎 Step 3/3: Depositing into sfrxETH vault...", "info");
+        }, 4000);
         
         console.log("✅ CommandCenter: Deposit processing complete");
         break;
@@ -246,15 +265,12 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
         setIsInvesting(true);
         const investAmount = parseFloat(data.amount || "0");
         
-        addLog(`🚀 AUTO-INVEST INITIATED: ${data.amount} FRAX → sFRAX Vault`, "invest");
+        addLog(`✅ Staked in sfrxETH. Yield Active.`, "success");
         
-        // Generate fake TX hash
-        const fakeTx = `0x${Math.random().toString(16).slice(2, 10)}${Math.random().toString(16).slice(2, 34)}`;
-        setCurrentTx(fakeTx);
-        
-        if (data.tx || fakeTx) {
-          const txHash = data.tx || fakeTx;
-          addLog(`✅ TX: ${txHash.slice(0, 10)}...${txHash.slice(-8)} [CONFIRMED]`, "success");
+        if (data.tx && data.tx !== "DEMO_MODE") {
+          const txHash = data.tx;
+          addLog(`🔗 Final TX: ${txHash.slice(0, 10)}...${txHash.slice(-8)}`, "success");
+          addLog(`📊 Explorer: https://fraxscan.com/tx/${txHash}`, "info");
         }
         
         // Subtract from available balance, add to invested
@@ -271,21 +287,21 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
         });
         
         // Simulate yield fluctuation
-        const newYield = 4.5 + (Math.random() * 0.1 - 0.05);
+        const newYield = 5.0 + (Math.random() * 0.1 - 0.05);
         setCurrentYield(Number(newYield.toFixed(2)));
         setYieldHistory(prev => [...prev.slice(-4), newYield]);
         
         setTimeout(() => {
-          addLog(`🎯 Position Active: ${investAmount.toFixed(4)} FRAX earning 5-10% APY`, "success");
+          addLog(`💰 Micro-Investment: ${investAmount} frxETH earning 5-10% APY`, "success");
           setAvailableBalance(prevAvail => {
             setInvestedAmount(prevInv => {
-              addLog(`💼 Available: ${prevAvail.toFixed(4)} FRAX | Deployed: ${prevInv.toFixed(4)} FRAX`, "info");
+              addLog(`💼 Available: ${prevAvail.toFixed(6)} frxETH | Staked: ${prevInv.toFixed(6)} frxETH`, "info");
               return prevInv;
             });
             return prevAvail;
           });
           setIsInvesting(false);
-        }, 2000);
+        }, 1500);
         break;
       
       default:

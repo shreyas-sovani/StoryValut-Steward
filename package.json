@@ -27,8 +27,13 @@
   "dependencies": {
     "@hono/node-server": "^1.19.6",
     "@iqai/adk": "^0.1.0",
-    "dotenv": "^16.4.5",
+    "clsx": "^2.1.1",
+    "dotenv": "^16.6.1",
+    "framer-motion": "^12.23.25",
     "hono": "^4.10.7",
+    "lucide-react": "^0.555.0",
+    "recharts": "^3.5.1",
+    "tailwind-merge": "^3.4.0",
     "tsx": "^4.19.2",
     "viem": "^2.21.54",
     "zod": "^3.23.8"
