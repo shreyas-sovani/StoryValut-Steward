@@ -215,8 +215,99 @@ User deposits FRAX to agent wallet
 | GET | `/api/funding/stream` | SSE stream for real-time updates |
 | GET | `/api/wallet/:address/balances` | Get token balances |
 | GET | `/api/market/data` | Get ETH price, gas, sentiment |
+| POST | `/api/withdraw` | Withdraw all funds to recipient address |
 | POST | `/api/simulate/crash` | Demo: Simulate market crash |
 | POST | `/api/simulate/recovery` | Demo: Simulate recovery |
+
+---
+
+## 💸 Withdraw All Funds Feature
+
+### Overview
+The **Withdraw All Funds** feature allows users to transfer all tokens held by the agent wallet to a specified recipient address. This is essential for users who want to exit their positions and reclaim their funds.
+
+### Architecture
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  InvestmentDashboard (Frontend)                                         │
+│  ┌─────────────────────────────────────────────────────────────────────┐│
+│  │  "Withdraw All" Button (LogOut Icon)                                ││
+│  │  ├─ Opens modal with recipient address input                        ││
+│  │  ├─ Validates Ethereum address format (0x...)                       ││
+│  │  └─ Displays current holdings to withdraw                           ││
+│  └─────────────────────────────────────────────────────────────────────┘│
+│         │                                                               │
+│         ↓ POST /api/withdraw { recipientAddress }                       │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│  withdrawAllFundsToRecipient() - executionTools.ts                      │
+│                                                                         │
+│  STEP 1: Transfer ERC-20 Tokens (in sequence)                           │
+│  ├─ sfrxUSD → Recipient (if balance > 0)                                │
+│  ├─ sfrxETH → Recipient (if balance > 0)                                │
+│  ├─ frxETH  → Recipient (if balance > 0)                                │
+│  ├─ frxUSD  → Recipient (if balance > 0)                                │
+│  └─ WFRAX   → Recipient (if balance > 0)                                │
+│                                                                         │
+│  STEP 2: Transfer Native FRAX (Gas Token) - LAST                        │
+│  ├─ Reserve 0.01 FRAX for gas (FIXED_GAS_RESERVE)                       │
+│  ├─ Send remaining balance to recipient                                 │
+│  └─ Uses empirical gas reserve (Fraxtal L2 specific)                    │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Frontend Response Handling                                             │
+│  ├─ Real-time progress tracking per token                               │
+│  ├─ Clickable transaction hashes → Fraxscan                             │
+│  ├─ Success/Error status indicators                                     │
+│  └─ Auto-refresh balances after completion                              │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Implementation Details
+
+**1. ERC-20 Transfers First**
+```typescript
+const ERC20_TOKENS = [
+  { address: "0xfc00000000000000000000000000000000000008", symbol: "sfrxUSD" },
+  { address: "0xfc00000000000000000000000000000000000005", symbol: "sfrxETH" },
+  { address: "0xfc00000000000000000000000000000000000006", symbol: "frxETH" },
+  { address: "0xfc00000000000000000000000000000000000001", symbol: "frxUSD" },
+  { address: "0xfc00000000000000000000000000000000000002", symbol: "WFRAX" },
+];
+// Transfers executed sequentially with nonce management
+```
+
+**2. Native FRAX Transfer Last (Gas Optimization)**
+```typescript
+// Bulletproof gas reserve for Fraxtal L2
+const FIXED_GAS_RESERVE = 10000000000000000n; // 0.01 FRAX
+// - Actual gas cost: ~0.0018 FRAX per transfer
+// - Reserve provides 5.5x safety margin
+// - Empirically determined (RPC gas estimates unreliable on Fraxtal)
+```
+
+**3. Transaction Hash Display**
+```typescript
+// Each transfer returns txHash for Fraxscan verification
+{
+  step: "sfrxUSD Transfer",
+  status: "success",
+  message: "Sent 0.047916 sfrxUSD",
+  txHash: "0xfbcb18955bc64677d07ec7c7cfb407d64e672a19..."
+}
+// Links to: https://fraxscan.com/tx/{txHash}
+```
+
+### Security Considerations
+
+1. **Gas Reserve Protection**: Fixed 0.01 FRAX reserve ensures the native transfer never fails due to insufficient gas
+2. **Sequential Execution**: Tokens transferred one-by-one with confirmed receipts to prevent nonce collisions
+3. **Address Validation**: Frontend validates recipient address format before API call
+4. **Graceful Error Handling**: Individual token failures don't block other transfers
 
 ---
 
