@@ -619,26 +619,29 @@ app.get("/api/wallet/:address/balances", async (c) => {
     
     // Get current ETH price for USD calculations
     let ethPrice = 3850; // Default
+    let fraxPrice = 0.82; // Default FRAX price
     try {
-      const priceResponse = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
-      const priceData = await priceResponse.json() as { ethereum?: { usd?: number } };
+      const priceResponse = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum,frax&vs_currencies=usd");
+      const priceData = await priceResponse.json() as { ethereum?: { usd?: number }; frax?: { usd?: number } };
       ethPrice = priceData?.ethereum?.usd || 3850;
+      fraxPrice = priceData?.frax?.usd || 0.82;
     } catch (e) {
-      console.log("Using default ETH price");
+      console.log("Using default ETH/FRAX price");
     }
     
-    // Parse balances
+    // Parse balances from the wallet data
     const nativeFrax = parseFloat(walletData.balances?.FRAX_native || "0");
     const frxETH = parseFloat(walletData.balances?.frxETH || "0");
     const sfrxETH = parseFloat(walletData.balances?.sfrxETH || "0");
     const frxUSD = parseFloat(walletData.balances?.frxUSD || "0");
     const sfrxUSD = parseFloat(walletData.balances?.sfrxUSD || "0");
+    const wfrax = parseFloat(walletData.balances?.WFRAX || "0");
     
     return c.json({
       address: walletData.address,
       frax: {
         balance: nativeFrax.toFixed(6),
-        balanceUSD: nativeFrax, // FRAX is pegged to $1
+        balanceUSD: nativeFrax * fraxPrice,
       },
       frxeth: {
         balance: frxETH.toFixed(6),
@@ -651,15 +654,20 @@ app.get("/api/wallet/:address/balances", async (c) => {
       },
       frxusd: {
         balance: frxUSD.toFixed(6),
-        balanceUSD: frxUSD,
+        balanceUSD: frxUSD, // frxUSD is pegged to $1
       },
       sfrxusd: {
         balance: sfrxUSD.toFixed(6),
-        balanceUSD: sfrxUSD,
+        balanceUSD: sfrxUSD, // sfrxUSD is pegged to ~$1.17 (includes yield)
         apy: 4.1 + (Math.random() * 0.2 - 0.1), // Simulated dynamic APY
       },
-      totalUSD: nativeFrax + (frxETH + sfrxETH) * ethPrice + frxUSD + sfrxUSD,
+      wfrax: {
+        balance: wfrax.toFixed(6),
+        balanceUSD: wfrax * fraxPrice,
+      },
+      totalUSD: (nativeFrax + wfrax) * fraxPrice + (frxETH + sfrxETH) * ethPrice + frxUSD + sfrxUSD,
       ethPrice,
+      fraxPrice,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

@@ -425,6 +425,14 @@ export default function InvestmentDashboard({
       apy: 5.2,
       isStaked: true,
     },
+    {
+      symbol: "WFRAX",
+      name: "Wrapped FRAX",
+      balance: "0.000000",
+      balanceUSD: 0,
+      icon: <Coins className="w-6 h-6 text-amber-400" />,
+      color: "amber",
+    },
   ]);
 
   // Market data state
@@ -471,12 +479,22 @@ export default function InvestmentDashboard({
         
         // Update token balances with real data
         setTokenBalances(prev => prev.map(token => {
-          const balanceKey = token.symbol.toLowerCase();
-          if (data[balanceKey]) {
+          // Map symbol to API response key
+          const keyMap: Record<string, string> = {
+            "FRAX": "frax",
+            "frxETH": "frxeth",
+            "frxUSD": "frxusd",
+            "sfrxUSD": "sfrxusd",
+            "sfrxETH": "sfrxeth",
+            "WFRAX": "wfrax",
+          };
+          const balanceKey = keyMap[token.symbol];
+          if (balanceKey && data[balanceKey]) {
             return {
               ...token,
               balance: data[balanceKey].balance || "0",
               balanceUSD: data[balanceKey].balanceUSD || 0,
+              apy: data[balanceKey].apy || token.apy,
             };
           }
           return token;

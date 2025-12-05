@@ -570,6 +570,57 @@ async function getAgentWalletFn() {
     console.log(`[WALLET CHECK] sfrxETH balance (raw): ${sfrxethBalance.toString()}`);
     console.log(`[WALLET CHECK] sfrxETH balance (formatted): ${formatEther(sfrxethBalance)}`);
 
+    // Get frxUSD balance (USD stablecoin)
+    const frxusdBalance = await publicClient.readContract({
+      address: FRXUSD_TOKEN,
+      abi: [{
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      }],
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint;
+
+    console.log(`[WALLET CHECK] frxUSD balance (raw): ${frxusdBalance.toString()}`);
+    console.log(`[WALLET CHECK] frxUSD balance (formatted): ${formatEther(frxusdBalance)}`);
+
+    // Get sfrxUSD balance (staked frxUSD vault)
+    const sfrxusdBalance = await publicClient.readContract({
+      address: SFRXUSD_CONTRACT,
+      abi: [{
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      }],
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint;
+
+    console.log(`[WALLET CHECK] sfrxUSD balance (raw): ${sfrxusdBalance.toString()}`);
+    console.log(`[WALLET CHECK] sfrxUSD balance (formatted): ${formatEther(sfrxusdBalance)}`);
+
+    // Get WFRAX balance (Wrapped FRAX ERC-20)
+    const wfraxBalance = await publicClient.readContract({
+      address: WFRAX_CONTRACT,
+      abi: [{
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      }],
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint;
+
+    console.log(`[WALLET CHECK] WFRAX balance (raw): ${wfraxBalance.toString()}`);
+    console.log(`[WALLET CHECK] WFRAX balance (formatted): ${formatEther(wfraxBalance)}`);
+
     // Determine workflow based on holdings
     const hasFRAX = fraxBalance > 0n;
     const hasFrxETH = frxethBalance > 0n;
@@ -580,12 +631,18 @@ async function getAgentWalletFn() {
       balances: {
         FRAX_native: formatEther(fraxBalance),      // Native gas token
         frxETH: formatEther(frxethBalance),         // ERC20 token (needed for staking)
-        sfrxETH: formatEther(sfrxethBalance),       // Currently staked
+        sfrxETH: formatEther(sfrxethBalance),       // Staked frxETH
+        frxUSD: formatEther(frxusdBalance),         // USD stablecoin
+        sfrxUSD: formatEther(sfrxusdBalance),       // Staked frxUSD
+        WFRAX: formatEther(wfraxBalance),           // Wrapped FRAX ERC-20
       },
       holdings: {
         total_frax_native: formatEther(fraxBalance),
         investable_frxeth: formatEther(frxethBalance),
         staked_sfrxeth: formatEther(sfrxethBalance),
+        frxusd: formatEther(frxusdBalance),
+        staked_sfrxusd: formatEther(sfrxusdBalance),
+        wfrax: formatEther(wfraxBalance),
       },
       contracts: {
         frax_native: "Native Token (gas token)",
