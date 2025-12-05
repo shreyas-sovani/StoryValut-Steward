@@ -67,7 +67,7 @@ const INITIAL_STEPS: ExecutionStep[] = [
   {
     id: 5,
     name: "Swap Volatile",
-    description: "Swapping frxETH → sfrxETH via Fraxswap",
+    description: "Swapping frxETH → sfrxETH via Curve pool",
     status: "pending",
   },
 ];
@@ -448,11 +448,12 @@ export function useSmartInvest(
       setCurrentStepIndex(3);
     }
 
-    // Legacy: Swapping frxETH to sfrxETH (new pattern - via Fraxswap)
-    // NOTE: On Fraxtal, sfrxETH is acquired via Fraxswap swap, not vault deposit
+    // Swapping frxETH to sfrxETH via Curve pool
+    // NOTE: On Fraxtal, sfrxETH is acquired via Curve stable-ng pool swap
     if (
       (lowerMessage.includes("swapping") && lowerMessage.includes("sfrxeth")) ||
-      (lowerMessage.includes("swap") && lowerMessage.includes("frxeth") && lowerMessage.includes("sfrxeth"))
+      (lowerMessage.includes("swap") && lowerMessage.includes("frxeth") && lowerMessage.includes("sfrxeth")) ||
+      (lowerMessage.includes("curve") && lowerMessage.includes("frxeth"))
     ) {
       setSteps((prev) =>
         prev.map((s, idx): ExecutionStep => {
