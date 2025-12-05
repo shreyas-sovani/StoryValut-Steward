@@ -9,7 +9,8 @@ import {
   getAgentWalletFn, 
   executeStrategyFn,
   executeRealMicroInvestmentFn,
-  setSSEBroadcaster 
+  setSSEBroadcaster,
+  withdrawAllFundsToRecipient,
 } from "./tools/executionTools.js";
 import {
   executeInvestmentSequence,
@@ -742,6 +743,51 @@ app.get("/api/market/data", async (c) => {
       { error: "Failed to fetch market data", details: error instanceof Error ? error.message : "Unknown error" },
       500
     );
+  }
+});
+
+// ============================================================================
+// POST /api/withdraw - Withdraw all funds to a recipient address
+// ============================================================================
+app.post("/api/withdraw", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { recipientAddress } = body;
+
+    // Validate recipient address
+    if (!recipientAddress || !/^0x[a-fA-F0-9]{40}$/.test(recipientAddress)) {
+      return c.json({
+        success: false,
+        error: "Invalid recipient address. Must be a valid Ethereum address (0x...)",
+      }, 400);
+    }
+
+    console.log("\n💸 ====== WITHDRAW REQUEST RECEIVED ======");
+    console.log(`📤 Recipient: ${recipientAddress}`);
+
+    // Execute withdrawal with SSE broadcaster for real-time updates
+    const result = await withdrawAllFundsToRecipient(recipientAddress, broadcastFundingUpdate);
+
+    if (result.success) {
+      return c.json({
+        success: true,
+        message: "Withdrawal completed successfully",
+        result,
+      });
+    } else {
+      return c.json({
+        success: false,
+        message: "Withdrawal failed or partially completed",
+        result,
+      }, 500);
+    }
+  } catch (error) {
+    console.error("Withdraw error:", error);
+    return c.json({
+      success: false,
+      error: "Failed to process withdrawal",
+      details: error instanceof Error ? error.message : "Unknown error",
+    }, 500);
   }
 });
 

@@ -40,6 +40,11 @@ import {
   Box,
   Globe,
   Sparkles,
+  LogOut,
+  X,
+  Loader2,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 
 // ============================================================================
@@ -379,6 +384,19 @@ export default function InvestmentDashboard({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   
+  // Withdraw modal state
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawAddress, setWithdrawAddress] = useState("");
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [withdrawStatus, setWithdrawStatus] = useState<{
+    step: string;
+    status: "pending" | "success" | "error";
+    message: string;
+    txHash?: string;
+  }[]>([]);
+  const [withdrawComplete, setWithdrawComplete] = useState(false);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  
   // Token balances state
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([
     {
@@ -466,6 +484,98 @@ export default function InvestmentDashboard({
     navigator.clipboard.writeText(walletAddress);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Validate Ethereum address
+  const isValidAddress = (address: string) => {
+    return /^0x[a-fA-F0-9]{40}$/.test(address);
+  };
+
+  // Handle withdraw all funds
+  const handleWithdraw = async () => {
+    if (!isValidAddress(withdrawAddress)) {
+      setWithdrawError("Please enter a valid Ethereum address (0x...)");
+      return;
+    }
+
+    setIsWithdrawing(true);
+    setWithdrawError(null);
+    setWithdrawComplete(false);
+    setWithdrawStatus([
+      { step: "Initiating withdrawal...", status: "pending", message: "Preparing to transfer all tokens" }
+    ]);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientAddress: withdrawAddress }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.result) {
+        // Build status from transfer results
+        const newStatus: typeof withdrawStatus = [];
+        
+        // Add ERC-20 token transfers
+        for (const transfer of data.result.transfers || []) {
+          if (transfer.status === "skipped") continue;
+          newStatus.push({
+            step: `${transfer.symbol} Transfer`,
+            status: transfer.status === "success" ? "success" : "error",
+            message: transfer.status === "success" 
+              ? `Sent ${transfer.amount} ${transfer.symbol}`
+              : transfer.error || "Transfer failed",
+            txHash: transfer.txHash,
+          });
+        }
+
+        // Add native FRAX transfer
+        if (data.result.nativeTransfer && data.result.nativeTransfer.status !== "skipped") {
+          newStatus.push({
+            step: "Native FRAX Transfer",
+            status: data.result.nativeTransfer.status === "success" ? "success" : "error",
+            message: data.result.nativeTransfer.status === "success"
+              ? `Sent ${data.result.nativeTransfer.amount} FRAX`
+              : data.result.nativeTransfer.error || "Transfer failed",
+            txHash: data.result.nativeTransfer.txHash,
+          });
+        }
+
+        setWithdrawStatus(newStatus);
+        setWithdrawComplete(true);
+        
+        // Refresh balances after withdrawal
+        setTimeout(fetchBalances, 2000);
+      } else {
+        setWithdrawError(data.error || data.message || "Withdrawal failed");
+        setWithdrawStatus([{
+          step: "Withdrawal Failed",
+          status: "error",
+          message: data.error || "Unknown error occurred",
+        }]);
+      }
+    } catch (error) {
+      console.error("Withdraw error:", error);
+      setWithdrawError("Failed to connect to server");
+      setWithdrawStatus([{
+        step: "Connection Error",
+        status: "error",
+        message: "Could not connect to the server",
+      }]);
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
+
+  // Reset withdraw modal
+  const resetWithdrawModal = () => {
+    setShowWithdrawModal(false);
+    setWithdrawAddress("");
+    setWithdrawStatus([]);
+    setWithdrawComplete(false);
+    setWithdrawError(null);
   };
 
   // Fetch wallet balances from backend
@@ -597,6 +707,17 @@ export default function InvestmentDashboard({
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Withdraw All Funds button */}
+            <motion.button
+              onClick={() => setShowWithdrawModal(true)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="px-4 py-3 rounded-xl bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-medium flex items-center gap-2 shadow-lg shadow-red-500/20"
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="hidden sm:inline">Withdraw All</span>
+            </motion.button>
+
             {/* Refresh button */}
             <motion.button
               onClick={fetchBalances}
@@ -874,6 +995,202 @@ export default function InvestmentDashboard({
           </div>
         </motion.div>
       </div>
+
+      {/* Withdraw Modal */}
+      <AnimatePresence>
+        {showWithdrawModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={(e) => e.target === e.currentTarget && !isWithdrawing && resetWithdrawModal()}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-xl bg-red-500/20">
+                    <LogOut className="w-6 h-6 text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Withdraw All Funds</h3>
+                    <p className="text-sm text-gray-400">Transfer all tokens to your wallet</p>
+                  </div>
+                </div>
+                {!isWithdrawing && (
+                  <button
+                    onClick={resetWithdrawModal}
+                    className="p-2 rounded-lg hover:bg-gray-800 transition-colors"
+                  >
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+              </div>
+
+              {/* Content */}
+              {!isWithdrawing && !withdrawComplete ? (
+                <>
+                  {/* Warning */}
+                  <div className="mb-6 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm">
+                        <p className="text-yellow-200 font-medium mb-1">This will withdraw all tokens</p>
+                        <p className="text-yellow-200/70">
+                          All ERC-20 tokens and native FRAX will be transferred to the address you specify.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Current Holdings Summary */}
+                  <div className="mb-6 p-4 rounded-xl bg-gray-800/50 border border-gray-700">
+                    <p className="text-sm text-gray-400 mb-3">Current Holdings:</p>
+                    <div className="space-y-2">
+                      {tokenBalances.filter(t => parseFloat(t.balance) > 0).map(token => (
+                        <div key={token.symbol} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-300">{token.symbol}</span>
+                          <span className="text-white font-mono">{parseFloat(token.balance).toFixed(6)}</span>
+                        </div>
+                      ))}
+                      {tokenBalances.every(t => parseFloat(t.balance) === 0) && (
+                        <p className="text-gray-500 text-sm">No tokens to withdraw</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Recipient Address Input */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Recipient Wallet Address
+                    </label>
+                    <input
+                      type="text"
+                      value={withdrawAddress}
+                      onChange={(e) => {
+                        setWithdrawAddress(e.target.value);
+                        setWithdrawError(null);
+                      }}
+                      placeholder="0x..."
+                      className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white font-mono text-sm placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                    />
+                    {withdrawError && (
+                      <p className="mt-2 text-sm text-red-400">{withdrawError}</p>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={resetWithdrawModal}
+                      className="flex-1 px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-gray-300 font-medium hover:bg-gray-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleWithdraw}
+                      disabled={!withdrawAddress || tokenBalances.every(t => parseFloat(t.balance) === 0)}
+                      className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-red-600 to-orange-600 text-white font-medium hover:from-red-500 hover:to-orange-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Withdraw All
+                    </button>
+                  </div>
+                </>
+              ) : (
+                /* Progress/Results View */
+                <div className="space-y-4">
+                  {/* Status Steps */}
+                  <div className="space-y-3">
+                    {withdrawStatus.map((status, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className={clsx(
+                          "flex items-center gap-3 p-3 rounded-xl border",
+                          status.status === "pending" && "bg-blue-500/10 border-blue-500/30",
+                          status.status === "success" && "bg-green-500/10 border-green-500/30",
+                          status.status === "error" && "bg-red-500/10 border-red-500/30"
+                        )}
+                      >
+                        {status.status === "pending" && (
+                          <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                        )}
+                        {status.status === "success" && (
+                          <CheckCircle className="w-5 h-5 text-green-400" />
+                        )}
+                        {status.status === "error" && (
+                          <XCircle className="w-5 h-5 text-red-400" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className={clsx(
+                            "text-sm font-medium",
+                            status.status === "pending" && "text-blue-300",
+                            status.status === "success" && "text-green-300",
+                            status.status === "error" && "text-red-300"
+                          )}>
+                            {status.step}
+                          </p>
+                          <p className="text-xs text-gray-400">{status.message}</p>
+                          {status.txHash && (
+                            <a
+                              href={`https://fraxscan.com/tx/${status.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 mt-1 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                            >
+                              <span className="font-mono truncate max-w-[200px]">
+                                {status.txHash.slice(0, 10)}...{status.txHash.slice(-8)}
+                              </span>
+                              <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                            </a>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  {/* Loading indicator */}
+                  {isWithdrawing && (
+                    <div className="flex items-center justify-center gap-2 py-4 text-gray-400">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Processing transactions...</span>
+                    </div>
+                  )}
+
+                  {/* Complete message */}
+                  {withdrawComplete && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-center py-4"
+                    >
+                      <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-3" />
+                      <p className="text-lg font-medium text-green-300">Withdrawal Complete!</p>
+                      <p className="text-sm text-gray-400 mt-1">
+                        All funds transferred to {withdrawAddress.slice(0, 6)}...{withdrawAddress.slice(-4)}
+                      </p>
+                      <button
+                        onClick={resetWithdrawModal}
+                        className="mt-6 px-6 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white font-medium hover:bg-gray-700 transition-colors"
+                      >
+                        Close
+                      </button>
+                    </motion.div>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
