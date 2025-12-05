@@ -597,6 +597,147 @@ app.get("/api/funding/stream", (c) => {
 });
 
 // ============================================================================
+// WALLET BALANCE & MARKET DATA ENDPOINTS (for Investment Dashboard)
+// ============================================================================
+
+// Token addresses on Fraxtal (Chain ID: 252)
+const FRAXTAL_TOKEN_ADDRESSES = {
+  frxETH: "0xFC00000000000000000000000000000000000005",
+  sfrxETH: "0xFC00000000000000000000000000000000000008",
+  frxUSD: "0xfc00000000000000000000000000000000000001",
+  sfrxUSD: "0xfc00000000000000000000000000000000000009",
+};
+
+// GET /api/wallet/:address/balances - Get wallet token balances
+app.get("/api/wallet/:address/balances", async (c) => {
+  const address = c.req.param("address");
+  
+  try {
+    // Fetch wallet balances using executionTools
+    const walletResult = await getAgentWalletFn();
+    const walletData = JSON.parse(walletResult);
+    
+    // Get current ETH price for USD calculations
+    let ethPrice = 3850; // Default
+    try {
+      const priceResponse = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
+      const priceData = await priceResponse.json() as { ethereum?: { usd?: number } };
+      ethPrice = priceData?.ethereum?.usd || 3850;
+    } catch (e) {
+      console.log("Using default ETH price");
+    }
+    
+    // Parse balances
+    const nativeFrax = parseFloat(walletData.balances?.FRAX_native || "0");
+    const frxETH = parseFloat(walletData.balances?.frxETH || "0");
+    const sfrxETH = parseFloat(walletData.balances?.sfrxETH || "0");
+    const frxUSD = parseFloat(walletData.balances?.frxUSD || "0");
+    const sfrxUSD = parseFloat(walletData.balances?.sfrxUSD || "0");
+    
+    return c.json({
+      address: walletData.address,
+      frax: {
+        balance: nativeFrax.toFixed(6),
+        balanceUSD: nativeFrax, // FRAX is pegged to $1
+      },
+      frxeth: {
+        balance: frxETH.toFixed(6),
+        balanceUSD: frxETH * ethPrice,
+      },
+      sfrxeth: {
+        balance: sfrxETH.toFixed(6),
+        balanceUSD: sfrxETH * ethPrice,
+        apy: 5.2 + (Math.random() * 0.3 - 0.15), // Simulated dynamic APY
+      },
+      frxusd: {
+        balance: frxUSD.toFixed(6),
+        balanceUSD: frxUSD,
+      },
+      sfrxusd: {
+        balance: sfrxUSD.toFixed(6),
+        balanceUSD: sfrxUSD,
+        apy: 4.1 + (Math.random() * 0.2 - 0.1), // Simulated dynamic APY
+      },
+      totalUSD: nativeFrax + (frxETH + sfrxETH) * ethPrice + frxUSD + sfrxUSD,
+      ethPrice,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching wallet balances:", error);
+    return c.json(
+      { error: "Failed to fetch balances", details: error instanceof Error ? error.message : "Unknown error" },
+      500
+    );
+  }
+});
+
+// GET /api/market/data - Get market data (ETH price, gas, sentiment)
+app.get("/api/market/data", async (c) => {
+  try {
+    // Fetch ETH price from CoinGecko
+    let ethPrice = 3850;
+    let ethChange24h = 0;
+    
+    try {
+      const response = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&include_24hr_change=true");
+      const data = await response.json() as { ethereum?: { usd?: number; usd_24h_change?: number } };
+      ethPrice = data?.ethereum?.usd || 3850;
+      ethChange24h = data?.ethereum?.usd_24h_change || 0;
+    } catch (e) {
+      console.log("Using default market data");
+    }
+    
+    // Get block number from Fraxtal
+    let blockNumber = 28932662;
+    try {
+      const blockResponse = await fetch("https://rpc.frax.com", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "eth_blockNumber",
+          params: [],
+          id: 1,
+        }),
+      });
+      const blockData = await blockResponse.json() as { result?: string };
+      blockNumber = parseInt(blockData?.result || "0x1B9AEDA", 16);
+    } catch (e) {
+      console.log("Using default block number");
+    }
+    
+    // Calculate sentiment based on 24h change
+    let sentiment: "bullish" | "bearish" | "neutral" = "neutral";
+    let sentimentScore = 50;
+    if (ethChange24h > 2) {
+      sentiment = "bullish";
+      sentimentScore = Math.min(85, 50 + ethChange24h * 5);
+    } else if (ethChange24h < -2) {
+      sentiment = "bearish";
+      sentimentScore = Math.max(15, 50 + ethChange24h * 5);
+    } else {
+      sentimentScore = 50 + ethChange24h * 5;
+    }
+    
+    return c.json({
+      ethPrice,
+      ethChange24h,
+      gasPrice: 0.0001 + Math.random() * 0.0001, // Fraxtal has very low gas
+      blockNumber,
+      sentiment,
+      sentimentScore: Math.round(sentimentScore),
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching market data:", error);
+    return c.json(
+      { error: "Failed to fetch market data", details: error instanceof Error ? error.message : "Unknown error" },
+      500
+    );
+  }
+});
+
+// ============================================================================
 // AUTONOMOUS WATCHER LOOP (Phase 9 - Smart Invest Edition)
 // ============================================================================
 // Modes:

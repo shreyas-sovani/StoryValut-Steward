@@ -314,6 +314,18 @@ export function useSmartInvest(
         prev.map((s): ExecutionStep => ({ ...s, status: "success" as const }))
       );
       setIsComplete(true);
+      
+      // Dispatch event to trigger countdown redirect
+      window.dispatchEvent(
+        new CustomEvent("investmentComplete", {
+          detail: {
+            completedSteps: 5,
+            totalSteps: 5,
+            depositAmount: depositAmount,
+            txHashes: steps.filter(s => s.txHash).map(s => s.txHash),
+          },
+        })
+      );
       return;
     }
 
