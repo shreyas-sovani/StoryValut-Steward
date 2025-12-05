@@ -121,12 +121,14 @@ User deposits FRAX to agent wallet
 │  ├─ router.swapExactTokensForTokens([wFRAX, frxETH])                 │
 │  └─ SSE: broadcastLog(4, "Success", "Swapped to frxETH")             │
 │                                                                      │
-│  STEP 5: SWAP frxETH → sfrxETH (Fraxswap V2)                         │
-│  ├─ frxETH.approve(router, amount)                                   │
-│  ├─ router.swapExactTokensForTokens([frxETH, sfrxETH])               │
-│  │   ⚠️ NOTE: On Fraxtal L2, sfrxETH is acquired via swap,           │
-│  │      NOT via ERC4626 deposit() - deposit() reverts on L2          │
-│  └─ SSE: broadcastLog(5, "Success", "Staked in sfrxETH vault")       │
+│  STEP 5: SWAP frxETH → sfrxETH (Curve Pool)                          │
+│  ├─ Resolve pool indices via coins(i) function                       │
+│  ├─ Quote expected output via get_dy(i, j, dx)                       │
+│  ├─ frxETH.approve(curvePool, amount)                                │
+│  ├─ curvePool.exchange(i, j, dx, minDy, receiver)                    │
+│  │   ✅ Curve stable-ng pool: 0xF2f426Fe123De7b769b2D4F8c911512F065225d3
+│  │   ✅ Better depth & pricing than Fraxswap for frxETH↔sfrxETH      │
+│  └─ SSE: broadcastLog(5, "Success", "Swapped via Curve pool")        │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -195,12 +197,71 @@ User deposits FRAX to agent wallet
 | sfrxUSD | `0xfc00...0008` | Staked frxUSD vault (~4.1% APY) |
 | frxETH | `0xfc00...0006` | Liquid staking token |
 | sfrxETH | `0xfc00...0005` | Staked frxETH (~6-7% APY) |
-| Fraxswap Router | `0x7ae2...` | DEX for token swaps |
+| Fraxswap Router | `0x7ae2...` | DEX for wFRAX→frxUSD, wFRAX→frxETH swaps |
 | MintRedeemer | `0xBFc4...` | frxUSD → sfrxUSD staking |
+| **Curve frxETH/sfrxETH** | `0xF2f4...25d3` | **frxETH → sfrxETH swap (stable-ng pool)** |
 
 ---
 
-## 📡 API Endpoints
+## � Curve Pool Integration (Volatile Leg)
+
+### Why Curve Instead of Fraxswap?
+On Fraxtal L2, sfrxETH is a **bridged yield token**. The `deposit()` function on sfrxETH reverts on L2 (only works on Ethereum mainnet). We use the **Curve stable-ng pool** for better liquidity depth and pricing.
+
+### Pool Details
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Curve frxETH/sfrxETH Pool (Fraxtal)                                    │
+│  ├─ Address: 0xF2f426Fe123De7b769b2D4F8c911512F065225d3                 │
+│  ├─ Type: stable-ng (optimized for pegged assets)                       │
+│  ├─ UI: curve.fi/dex/fraxtal/pools/factory-stable-ng-6                  │
+│  └─ Liquidity: ~$3k per side (sufficient for micro-investments)         │
+│                                                                         │
+│  Coin Layout (resolved dynamically):                                    │
+│  ├─ coins(0) = frxETH  (0xfc00000000000000000000000000000000000006)     │
+│  └─ coins(1) = sfrxETH (0xfc00000000000000000000000000000000000005)     │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### curveFrxEthPool.ts Helper Module
+```typescript
+// Key exports:
+getIndices(publicClient)        // Resolve coin indices from pool
+quoteDy(publicClient, dx)       // Get expected output via get_dy()
+calculateMinDy(expectedDy, bps) // Apply slippage protection
+ensureAllowance(...)            // Check/set approval for Curve pool
+swapFrxEthToSfrxEth(...)        // Execute exchange(i, j, dx, minDy, receiver)
+
+// Configuration:
+CURVE_VOLATILE_SWAP_CONFIG = {
+  slippageBps: 50n,              // 0.5% slippage tolerance
+  minSwapAmountWei: 10^13,       // 0.00001 ETH minimum
+  pool: "0xF2f426Fe123De7b769b2D4F8c911512F065225d3"
+}
+```
+
+### Swap Flow
+```
+frxETH (from Step 4)
+       │
+       ↓ getIndices() - resolve i=0 (frxETH), j=1 (sfrxETH)
+       ↓ quoteDy(i, j, dx) - get expected sfrxETH output
+       ↓ calculateMinDy() - apply 0.5% slippage
+       ↓ ensureAllowance() - approve Curve pool if needed
+       ↓ exchange(i, j, dx, minDy, receiver) - execute swap
+       │
+       ↓
+sfrxETH (earning ~6-7% APY)
+```
+
+### Edge Case Handling
+- **Amount too small**: Skip swap, keep frxETH as volatile exposure
+- **Pool returns 0**: Skip swap, log warning, partial success
+- **Swap reverts**: Catch error, keep frxETH, mark as PARTIAL_SUCCESS
+
+---
+
+## �📡 API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -369,8 +430,11 @@ AgentBuilder.create("StorySteward")
 │  Layer 5: Transaction Verification                 │
 │    waitForTransactionReceipt() on every step       │
 ├────────────────────────────────────────────────────┤
-│  Layer 6: Nonce Management                         │
-│    Sequential nonce tracking (prevents collisions) │
+│  Layer 6: Robust Nonce Management                  │
+│    ├─ Dual block tag check (pending + latest)      │
+│    ├─ Retry logic with 500ms delay (3 attempts)    │
+│    ├─ 1s delay after reset for RPC sync            │
+│    └─ Sequential tracking prevents collisions      │
 └────────────────────────────────────────────────────┘
 ```
 
@@ -433,11 +497,13 @@ AgentBuilder.create("StorySteward")
 
 1. **Autonomous Execution**: Agent detects deposits and invests without human intervention
 2. **Real-Time UI**: SSE streaming provides live transaction updates to frontend
-3. **Fraxtal L2 Optimization**: Uses Fraxswap V2 swap for sfrxETH (deposit() doesn't work on L2)
-4. **Story-Based Allocation**: AI analyzes natural language for personalized strategy
-5. **5-Step DeFi Pipeline**: Wrap → Swap(Stable) → Stake → Swap(Volatile) → Stake
-6. **Production-Safe**: Multi-layer security with gas reserves and execution flags
-7. **Session Management**: Multiple users can interact simultaneously
+3. **Curve Pool Integration**: Uses Curve stable-ng pool for frxETH→sfrxETH (better depth than Fraxswap)
+4. **Robust Nonce Management**: Dual block tag check + retry logic prevents transaction failures
+5. **Story-Based Allocation**: AI analyzes natural language for personalized strategy
+6. **5-Step DeFi Pipeline**: Wrap → Swap(Stable) → Stake → Swap(Volatile) → Curve Swap
+7. **Production-Safe**: Multi-layer security with gas reserves and execution flags
+8. **Withdraw All Funds**: Complete exit strategy with sequential token transfers
+9. **Session Management**: Multiple users can interact simultaneously
 
 ---
 
@@ -451,8 +517,9 @@ storyvault-steward/
 │   ├── cli.ts                # Terminal interface
 │   └── tools/
 │       ├── fraxTools.ts      # Yield data fetching
-│       ├── executionTools.ts # Legacy micro-investment (deprecated on L2)
+│       ├── executionTools.ts # Withdraw all funds + legacy micro-investment
 │       ├── smartInvestTools.ts # 5-step Smart Invest sequence
+│       ├── curveFrxEthPool.ts  # Curve pool helper (frxETH→sfrxETH)
 │       ├── strategyManager.ts  # User strategy preferences
 │       ├── walletTool.ts     # Balance checking
 │       └── fraxlendTools.ts  # Leverage calculations
@@ -462,7 +529,7 @@ storyvault-steward/
 │   ├── components/
 │   │   ├── ChatInterface.tsx # AI chat with strategy detection
 │   │   ├── SmartInvestWidget.tsx # 5-step execution UI
-│   │   ├── InvestmentDashboard.tsx # Portfolio monitoring
+│   │   ├── InvestmentDashboard.tsx # Portfolio monitoring + withdraw
 │   │   ├── StrategySlider.tsx # Allocation adjustment
 │   │   └── LiveExecutionLog.tsx # Real-time transaction log
 │   ├── context/
