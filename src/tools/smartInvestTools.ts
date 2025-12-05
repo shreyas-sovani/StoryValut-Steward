@@ -49,12 +49,16 @@ const CONTRACTS = {
   frxETH: "0xfc00000000000000000000000000000000000006" as Address,
   sfrxETH: "0xfc00000000000000000000000000000000000005" as Address, // Token (bridged yield token on Fraxtal)
   
-  // Fraxswap V2 Router (Uniswap V2 compatible) - Used for all swaps including frxETH ↔ sfrxETH
+  // Fraxswap V2 Router (Uniswap V2 compatible) - Used for wFRAX→frxUSD and wFRAX→frxETH swaps
   fraxswapRouter: "0x7ae2A0f3D9eF911A0a3f726FA9fbFCA25Dc18f7A" as Address,
   
-  // Fraxswap V2 Pair: frxETH/sfrxETH (Fraxtal) - Used for volatile staking via swap
-  // NOTE: On Fraxtal, sfrxETH is acquired via Fraxswap, NOT via vault deposit()
-  // The sfrxETH deposit() function reverts on Fraxtal L2 - it's L1-only
+  // Curve stable-ng Pool: frxETH/sfrxETH (Fraxtal)
+  // UI: https://www.curve.finance/dex/fraxtal/pools/factory-stable-ng-6/deposit
+  // Used for volatile leg: frxETH → sfrxETH via Curve exchange()
+  // NOTE: This replaces the old Fraxswap approach for better depth and pricing
+  curveFrxETHSfrxETH: "0xF2f426Fe123De7b769b2D4F8c911512F065225d3" as Address,
+  
+  // Legacy: Fraxswap V2 Pair (no longer used for frxETH→sfrxETH)
   frxETH_sfrxETH_pair: "0x07412F06DB215A20909C3c29FaA3cC7A48777185" as Address,
   
   // FraxtalERC4626MintRedeemer - Required for sfrxUSD staking on Fraxtal
@@ -63,16 +67,29 @@ const CONTRACTS = {
 } as const;
 
 // ============================================================================
-// VOLATILE LEG CONFIGURATION
+// VOLATILE LEG CONFIGURATION - CURVE POOL
 // ============================================================================
-// On Fraxtal L2, sfrxETH is a bridged yield token. The recommended way to
-// acquire sfrxETH is via Fraxswap V2, NOT by calling deposit() on the token.
-// The deposit() function on sfrxETH reverts on Fraxtal - it's only available on L1.
+// On Fraxtal L2, sfrxETH is a bridged yield token. We use the Curve stable-ng
+// pool to swap frxETH → sfrxETH for better depth and pricing.
 //
-// Swap path: frxETH → sfrxETH via Fraxswap V2 Router
-// Pair: 0x07412F06DB215A20909C3c29FaA3cC7A48777185 (frxETH/sfrxETH)
+// Pool: 0xF2f426Fe123De7b769b2D4F8c911512F065225d3 (Curve frxETH/sfrxETH)
+// UI: https://www.curve.finance/dex/fraxtal/pools/factory-stable-ng-6/deposit
 // ============================================================================
 
+// Import Curve helper module
+import {
+  CURVE_FRXETH_SFRXETH_POOL,
+  CURVE_VOLATILE_SWAP_CONFIG,
+  CURVE_POOL_ABI,
+  getIndices as getCurveIndices,
+  quoteDy as curvQuoteDy,
+  calculateMinDy,
+  ensureAllowance as ensureCurveAllowance,
+  swapFrxEthToSfrxEth,
+  getSfrxEthBalance,
+} from "./curveFrxEthPool.js";
+
+// Legacy config - kept for reference but no longer used
 const VOLATILE_SWAP_CONFIG = {
   // Slippage tolerance in basis points (50 = 0.5%)
   slippageBps: 50n,
@@ -303,6 +320,10 @@ let agentAccount: ReturnType<typeof privateKeyToAccount> | null = null;
 
 // Track current nonce to prevent collisions
 let currentNonce: number | null = null;
+// Track last time we fetched nonce from chain
+let lastNonceFetchTime: number = 0;
+// Minimum time between chain nonce fetches (to avoid stale reads)
+const NONCE_FETCH_INTERVAL_MS = 2000;
 
 // Initialize wallet from env
 let AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY || "";
@@ -327,19 +348,57 @@ if (AGENT_PRIVATE_KEY && AGENT_PRIVATE_KEY !== "0x") {
 /**
  * Get and increment nonce for transaction ordering
  * Uses 'pending' to include any pending transactions in the count
+ * Falls back to 'latest' + retry if pending doesn't work
  */
 async function getNextNonce(): Promise<number> {
   if (!agentAccount) throw new Error("Agent wallet not initialized");
   
-  // Always get fresh nonce from chain (including pending txs)
-  const chainNonce = await publicClient.getTransactionCount({
-    address: agentAccount.address,
-    blockTag: "pending",
-  });
+  const now = Date.now();
   
-  // Use the higher of chain nonce or tracked nonce
-  if (currentNonce === null || chainNonce > currentNonce) {
-    currentNonce = chainNonce;
+  // Always fetch fresh nonce at the start of a sequence or if enough time has passed
+  if (currentNonce === null || (now - lastNonceFetchTime) > NONCE_FETCH_INTERVAL_MS) {
+    // Fetch nonce with retry logic for reliability
+    let chainNonce: number = 0;
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    while (attempts < maxAttempts) {
+      attempts++;
+      try {
+        // Try pending first for most accurate count
+        chainNonce = await publicClient.getTransactionCount({
+          address: agentAccount.address,
+          blockTag: "pending",
+        });
+        
+        // Also get latest to compare
+        const latestNonce = await publicClient.getTransactionCount({
+          address: agentAccount.address,
+          blockTag: "latest",
+        });
+        
+        // Use the higher of the two (pending should >= latest)
+        chainNonce = Math.max(chainNonce, latestNonce);
+        
+        console.log(`[SmartInvest] 🔄 Nonce fetch attempt ${attempts}: pending=${chainNonce}, latest=${latestNonce}`);
+        break;
+      } catch (error) {
+        console.log(`[SmartInvest] ⚠️ Nonce fetch attempt ${attempts} failed, retrying...`);
+        if (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms before retry
+        }
+      }
+    }
+    
+    lastNonceFetchTime = now;
+    
+    // Always use chain nonce if it's higher, or if we're starting fresh
+    if (currentNonce === null || chainNonce > currentNonce) {
+      currentNonce = chainNonce;
+      console.log(`[SmartInvest] 🔄 Using chain nonce: ${chainNonce}`);
+    } else {
+      console.log(`[SmartInvest] 🔄 Keeping tracked nonce: ${currentNonce} (chain: ${chainNonce})`);
+    }
   }
   
   const nonce = currentNonce;
@@ -351,9 +410,15 @@ async function getNextNonce(): Promise<number> {
 
 /**
  * Reset nonce tracking (call after errors or when starting new sequence)
+ * Forces a fresh fetch from chain on next getNextNonce() call
  */
 async function resetNonce(): Promise<void> {
   currentNonce = null;
+  lastNonceFetchTime = 0; // Force fresh fetch
+  
+  // Small delay to allow any pending transactions to be indexed
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  
   console.log("[SmartInvest] Nonce tracking reset");
 }
 
@@ -917,100 +982,79 @@ export async function executeInvestmentSequence(
       broadcastLog(4, "Success", `Swapped to ${formatEther(frxETHReceived)} frxETH`, swapVolatileTx, formatEther(frxETHReceived));
 
       // ======================================================================
-      // STEP 5: Swap frxETH → sfrxETH via Fraxswap V2
+      // STEP 5: Swap frxETH → sfrxETH via Curve stable-ng Pool
       // ======================================================================
       // NOTE: On Fraxtal L2, sfrxETH is a bridged yield token.
-      // The recommended way to acquire sfrxETH is via Fraxswap swap,
-      // NOT by calling deposit() on the sfrxETH token (which reverts on L2).
+      // We use the Curve frxETH/sfrxETH pool for better depth and pricing.
       // 
-      // Swap uses the frxETH/sfrxETH pair: 0x07412F06DB215A20909C3c29FaA3cC7A48777185
+      // Pool: 0xF2f426Fe123De7b769b2D4F8c911512F065225d3 (Curve stable-ng)
+      // UI: https://www.curve.finance/dex/fraxtal/pools/factory-stable-ng-6/deposit
       // ======================================================================
       
-      addLog("� STEP 5: Swapping frxETH → sfrxETH via Fraxswap V2...");
-      broadcastLog(5, "Processing", `Swapping ${formatEther(frxETHReceived)} frxETH → sfrxETH via Fraxswap...`);
+      addLog("🔄 STEP 5: Swapping frxETH → sfrxETH via Curve pool...");
+      broadcastLog(5, "Processing", `Swapping ${formatEther(frxETHReceived)} frxETH → sfrxETH via Curve pool...`);
 
-      // Check if frxETH amount is too small for AMM swap
-      if (frxETHReceived < VOLATILE_SWAP_CONFIG.minSwapAmount) {
-        addLog(`⚠️ Skipping sfrxETH swap: frxETH amount (${formatEther(frxETHReceived)}) too small for AMM trade`);
+      // Check if frxETH amount is below minimum for Curve swap
+      if (frxETHReceived < CURVE_VOLATILE_SWAP_CONFIG.minSwapAmountWei) {
+        addLog(`⚠️ Skipping Curve frxETH→sfrxETH swap: amount (${formatEther(frxETHReceived)} frxETH) below minSwapAmountWei`);
         addLog(`   Keeping volatile leg as frxETH instead of sfrxETH`);
-        broadcastLog(5, "Success", `Skipped sfrxETH swap - amount too small. Holding ${formatEther(frxETHReceived)} frxETH`, undefined, formatEther(frxETHReceived));
+        broadcastLog(5, "Success", `Skipped sfrxETH swap – amount too small for Curve pool, holding ${formatEther(frxETHReceived)} frxETH as volatile exposure`, undefined, formatEther(frxETHReceived));
       } else {
-        // Step 5a: Approve Fraxswap Router to spend frxETH
-        addLog("🔐 Step 5a: Approving Fraxswap Router for frxETH...");
-
-        const approveFrxETHForSwapNonce = await getNextNonce();
-        const approveFrxETHForSwapTx = await walletClient.writeContract({
-          chain: fraxtal,
-          account: agentAccount,
-          address: CONTRACTS.frxETH,
-          abi: ERC20_ABI,
-          functionName: "approve",
-          args: [CONTRACTS.fraxswapRouter, frxETHReceived],
-          nonce: approveFrxETHForSwapNonce,
-        });
-
-        const approveFrxETHForSwapReceipt = await waitForTx(approveFrxETHForSwapTx, "Approve Router for frxETH→sfrxETH swap");
-        result.transactions.approveRouterForSfrxETHSwap = {
-          hash: approveFrxETHForSwapTx,
-          block: approveFrxETHForSwapReceipt.blockNumber.toString(),
-          explorer: `https://fraxscan.com/tx/${approveFrxETHForSwapTx}`,
-        };
-
-        // Step 5b: Quote the swap to calculate amountOutMin with slippage
-        const swapPath: readonly Address[] = [CONTRACTS.frxETH, CONTRACTS.sfrxETH];
-        let expectedSfrxETH: bigint = 0n;
-        let amountOutMin: bigint = 0n;
-
         try {
-          const amountsOut = await publicClient.readContract({
-            address: CONTRACTS.fraxswapRouter,
-            abi: FRAXSWAP_ROUTER_ABI,
-            functionName: "getAmountsOut",
-            args: [frxETHReceived, swapPath as Address[]],
-          }) as bigint[];
-          expectedSfrxETH = amountsOut[1];
+          // Step 5a: Resolve Curve pool indices (cached after first call)
+          addLog("� Step 5a: Resolving Curve pool coin indices...");
+          const { frxEthIndex, sfrxEthIndex } = await getCurveIndices(publicClient);
+          addLog(`   frxETH index: ${frxEthIndex}, sfrxETH index: ${sfrxEthIndex}`);
+
+          // Step 5b: Quote expected output using get_dy
+          addLog("📊 Step 5b: Quoting Curve swap...");
+          const expectedSfrxETH = await curvQuoteDy(publicClient, frxETHReceived);
           
-          // Apply slippage tolerance (e.g., 0.5% = 50 bps)
-          amountOutMin = (expectedSfrxETH * (10000n - VOLATILE_SWAP_CONFIG.slippageBps)) / 10000n;
-          
-          addLog(`   Expected output: ${formatEther(expectedSfrxETH)} sfrxETH`);
-          addLog(`   Min output (with ${Number(VOLATILE_SWAP_CONFIG.slippageBps) / 100}% slippage): ${formatEther(amountOutMin)} sfrxETH`);
-        } catch (quoteError) {
-          addLog(`   ⚠️ Could not get quote for frxETH→sfrxETH, using 0 slippage protection`);
-          amountOutMin = 0n;
-        }
+          if (expectedSfrxETH === 0n) {
+            addLog(`⚠️ Skipping sfrxETH swap: Curve get_dy returned 0 - amount too small for pool`);
+            addLog(`   Keeping volatile leg as frxETH instead of sfrxETH`);
+            broadcastLog(5, "Success", `Skipped sfrxETH swap – pool returned 0 output, holding ${formatEther(frxETHReceived)} frxETH as volatile exposure`, undefined, formatEther(frxETHReceived));
+          } else {
+            // Calculate minimum output with slippage protection
+            const amountOutMin = calculateMinDy(expectedSfrxETH, CURVE_VOLATILE_SWAP_CONFIG.slippageBps);
+            
+            addLog(`   Expected output: ${formatEther(expectedSfrxETH)} sfrxETH`);
+            addLog(`   Min output (with ${Number(CURVE_VOLATILE_SWAP_CONFIG.slippageBps) / 100}% slippage): ${formatEther(amountOutMin)} sfrxETH`);
 
-        // Check if output would be 0 (amount too small for pool)
-        if (expectedSfrxETH === 0n || amountOutMin === 0n) {
-          addLog(`⚠️ Skipping sfrxETH swap: getAmountsOut returned 0 - amount too small for pool`);
-          addLog(`   Keeping volatile leg as frxETH instead of sfrxETH`);
-          broadcastLog(5, "Success", `Skipped sfrxETH swap - pool returned 0. Holding ${formatEther(frxETHReceived)} frxETH`, undefined, formatEther(frxETHReceived));
-        } else {
-          // Step 5c: Execute the swap frxETH → sfrxETH
-          addLog(`💱 Swapping ${formatEther(frxETHReceived)} frxETH → sfrxETH...`);
-
-          const deadline = BigInt(Math.floor(Date.now() / 1000) + 600); // 10 minutes
-
-          try {
-            const swapFrxETHToSfrxETHNonce = await getNextNonce();
-            const swapFrxETHToSfrxETHTx = await walletClient.writeContract({
-              chain: fraxtal,
-              account: agentAccount,
-              address: CONTRACTS.fraxswapRouter,
-              abi: FRAXSWAP_ROUTER_ABI,
-              functionName: "swapExactTokensForTokens",
-              args: [
-                frxETHReceived,
-                amountOutMin,
-                swapPath as Address[],
-                agentAccount.address,
-                deadline,
-              ],
-              nonce: swapFrxETHToSfrxETHNonce,
+            // Step 5c: Approve Curve pool to spend frxETH (if needed)
+            addLog("🔐 Step 5c: Checking/setting Curve pool allowance for frxETH...");
+            const approveNonce = await getNextNonce();
+            const allowanceResult = await ensureCurveAllowance(walletClient, publicClient, {
+              owner: agentAccount.address,
+              amount: frxETHReceived,
+              nonce: approveNonce,
             });
 
-            const swapFrxETHToSfrxETHReceipt = await waitForTx(swapFrxETHToSfrxETHTx, "Swap frxETH → sfrxETH");
-            const sfrxETHReceived = await getTokenBalance(CONTRACTS.sfrxETH, agentAccount.address);
+            if (allowanceResult.wasNeeded && allowanceResult.txHash) {
+              const approveReceipt = await waitForTx(allowanceResult.txHash, "Approve Curve pool for frxETH");
+              result.transactions.approveRouterForSfrxETHSwap = {
+                hash: allowanceResult.txHash,
+                block: approveReceipt.blockNumber.toString(),
+                explorer: `https://fraxscan.com/tx/${allowanceResult.txHash}`,
+              };
+              addLog(`✅ Approved Curve pool for ${formatEther(frxETHReceived)} frxETH`);
+            } else {
+              addLog(`   Allowance sufficient, skipping approve`);
+            }
+
+            // Step 5d: Execute the swap via Curve exchange()
+            addLog(`💱 Step 5d: Executing Curve exchange ${formatEther(frxETHReceived)} frxETH → sfrxETH...`);
+            
+            const swapNonce = await getNextNonce();
+            const swapFrxETHToSfrxETHTx = await swapFrxEthToSfrxEth(walletClient, publicClient, {
+              dx: frxETHReceived,
+              minDy: amountOutMin,
+              receiver: agentAccount.address,
+              nonce: swapNonce,
+            });
+
+            const swapFrxETHToSfrxETHReceipt = await waitForTx(swapFrxETHToSfrxETHTx, "Swap frxETH → sfrxETH via Curve");
+            const sfrxETHReceived = await getSfrxEthBalance(publicClient, agentAccount.address);
             
             result.transactions.swapFrxETHToSfrxETH = {
               hash: swapFrxETHToSfrxETHTx,
@@ -1019,18 +1063,18 @@ export async function executeInvestmentSequence(
               amountOut: formatEther(sfrxETHReceived),
             };
             
-            addLog(`✅ Swapped to ${formatEther(sfrxETHReceived)} sfrxETH via Fraxswap`);
-            broadcastLog(5, "Success", `Swapped to ${formatEther(sfrxETHReceived)} sfrxETH (~8-12% APY)`, swapFrxETHToSfrxETHTx, formatEther(sfrxETHReceived));
-          } catch (swapError: any) {
-            // Handle swap revert - keep frxETH as volatile asset
-            addLog(`❌ Volatile swap frxETH → sfrxETH via Fraxswap reverted: ${swapError.message}`);
-            addLog(`   Keeping volatile leg as frxETH instead of sfrxETH`);
-            broadcastLog(5, "Failed", `Volatile swap frxETH → sfrxETH via Fraxswap reverted: ${swapError.message?.slice(0, 100) || 'Unknown error'}`);
-            
-            // Don't throw - partial success, volatile stays as frxETH
-            result.status = "PARTIAL_SUCCESS";
-            result.error = `Volatile swap failed: ${swapError.message}. frxETH held instead of sfrxETH.`;
+            addLog(`✅ Swapped ${formatEther(frxETHReceived)} frxETH → ${formatEther(sfrxETHReceived)} sfrxETH via Curve frxETH/sfrxETH pool`);
+            broadcastLog(5, "Success", `Swapped ${formatEther(frxETHReceived)} frxETH → ${formatEther(sfrxETHReceived)} sfrxETH via Curve frxETH/sfrxETH pool`, swapFrxETHToSfrxETHTx, formatEther(sfrxETHReceived));
           }
+        } catch (swapError: any) {
+          // Handle Curve swap failure - keep frxETH as volatile asset (partial success)
+          addLog(`❌ Curve frxETH→sfrxETH swap failed: ${swapError.message}`);
+          addLog(`   Keeping volatile leg as frxETH instead of sfrxETH`);
+          broadcastLog(5, "Failed", `Curve frxETH→sfrxETH swap failed; keeping frxETH as volatile exposure`);
+          
+          // Don't throw - partial success, volatile stays as frxETH
+          result.status = "PARTIAL_SUCCESS";
+          result.error = `Curve swap failed: ${swapError.message}. frxETH held instead of sfrxETH.`;
         }
       }
     }
