@@ -570,6 +570,57 @@ async function getAgentWalletFn() {
     console.log(`[WALLET CHECK] sfrxETH balance (raw): ${sfrxethBalance.toString()}`);
     console.log(`[WALLET CHECK] sfrxETH balance (formatted): ${formatEther(sfrxethBalance)}`);
 
+    // Get frxUSD balance (USD stablecoin)
+    const frxusdBalance = await publicClient.readContract({
+      address: FRXUSD_TOKEN,
+      abi: [{
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      }],
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint;
+
+    console.log(`[WALLET CHECK] frxUSD balance (raw): ${frxusdBalance.toString()}`);
+    console.log(`[WALLET CHECK] frxUSD balance (formatted): ${formatEther(frxusdBalance)}`);
+
+    // Get sfrxUSD balance (staked frxUSD vault)
+    const sfrxusdBalance = await publicClient.readContract({
+      address: SFRXUSD_CONTRACT,
+      abi: [{
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      }],
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint;
+
+    console.log(`[WALLET CHECK] sfrxUSD balance (raw): ${sfrxusdBalance.toString()}`);
+    console.log(`[WALLET CHECK] sfrxUSD balance (formatted): ${formatEther(sfrxusdBalance)}`);
+
+    // Get WFRAX balance (Wrapped FRAX ERC-20)
+    const wfraxBalance = await publicClient.readContract({
+      address: WFRAX_CONTRACT,
+      abi: [{
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      }],
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint;
+
+    console.log(`[WALLET CHECK] WFRAX balance (raw): ${wfraxBalance.toString()}`);
+    console.log(`[WALLET CHECK] WFRAX balance (formatted): ${formatEther(wfraxBalance)}`);
+
     // Determine workflow based on holdings
     const hasFRAX = fraxBalance > 0n;
     const hasFrxETH = frxethBalance > 0n;
@@ -580,12 +631,18 @@ async function getAgentWalletFn() {
       balances: {
         FRAX_native: formatEther(fraxBalance),      // Native gas token
         frxETH: formatEther(frxethBalance),         // ERC20 token (needed for staking)
-        sfrxETH: formatEther(sfrxethBalance),       // Currently staked
+        sfrxETH: formatEther(sfrxethBalance),       // Staked frxETH
+        frxUSD: formatEther(frxusdBalance),         // USD stablecoin
+        sfrxUSD: formatEther(sfrxusdBalance),       // Staked frxUSD
+        WFRAX: formatEther(wfraxBalance),           // Wrapped FRAX ERC-20
       },
       holdings: {
         total_frax_native: formatEther(fraxBalance),
         investable_frxeth: formatEther(frxethBalance),
         staked_sfrxeth: formatEther(sfrxethBalance),
+        frxusd: formatEther(frxusdBalance),
+        staked_sfrxusd: formatEther(sfrxusdBalance),
+        wfrax: formatEther(wfraxBalance),
       },
       contracts: {
         frax_native: "Native Token (gas token)",
@@ -1091,6 +1148,334 @@ async function executeStrategyFn(args: ExecuteStrategyArgs) {
       ],
     }, null, 2);
   }
+}
+
+// ============================================================================
+// WITHDRAW ALL FUNDS - Transfer all tokens to a recipient address
+// ============================================================================
+
+// ERC20 Transfer ABI
+const ERC20_TRANSFER_ABI = [{
+  name: 'transfer',
+  type: 'function',
+  stateMutability: 'nonpayable',
+  inputs: [
+    { name: 'to', type: 'address' },
+    { name: 'amount', type: 'uint256' }
+  ],
+  outputs: [{ type: 'bool' }]
+}] as const;
+
+// Token configuration for withdrawal
+const WITHDRAWAL_TOKENS = [
+  { symbol: "sfrxUSD", address: SFRXUSD_CONTRACT, name: "Staked Frax USD" },
+  { symbol: "sfrxETH", address: SFRXETH_CONTRACT, name: "Staked Frax Ether" },
+  { symbol: "frxETH", address: FRXETH_TOKEN, name: "Frax Ether" },
+  { symbol: "frxUSD", address: FRXUSD_TOKEN, name: "Frax USD" },
+  { symbol: "WFRAX", address: WFRAX_CONTRACT, name: "Wrapped FRAX" },
+];
+
+interface WithdrawResult {
+  success: boolean;
+  recipient: string;
+  transfers: Array<{
+    token: string;
+    symbol: string;
+    amount: string;
+    txHash?: string;
+    status: "success" | "failed" | "skipped";
+    error?: string;
+  }>;
+  nativeTransfer?: {
+    amount: string;
+    txHash?: string;
+    status: "success" | "failed" | "skipped";
+    error?: string;
+  };
+  totalGasUsed: string;
+  timestamp: string;
+}
+
+/**
+ * Withdraw all funds from the agent wallet to a recipient address.
+ * 
+ * TRANSFER ORDER (optimized for gas management):
+ * 1. First: All ERC-20 tokens (sfrxUSD, sfrxETH, frxETH, frxUSD, WFRAX)
+ * 2. Last: Native FRAX (gas token) - leaving just enough for the final transfer
+ * 
+ * GAS MANAGEMENT:
+ * - Estimates gas for each transfer
+ * - Reserves enough FRAX for all subsequent transfers
+ * - Final FRAX transfer sends (balance - reserved gas)
+ * 
+ * ERROR HANDLING:
+ * - Graceful failure: if one token fails, continues with others
+ * - Returns detailed status for each transfer
+ * - Logs all operations for debugging
+ */
+export async function withdrawAllFundsToRecipient(
+  recipientAddress: string,
+  broadcaster?: BroadcastFn
+): Promise<WithdrawResult> {
+  console.log("\n💸 ====== WITHDRAW ALL FUNDS ======");
+  console.log(`📤 Recipient: ${recipientAddress}`);
+  
+  const result: WithdrawResult = {
+    success: false,
+    recipient: recipientAddress,
+    transfers: [],
+    totalGasUsed: "0",
+    timestamp: new Date().toISOString(),
+  };
+
+  // Validate recipient address
+  if (!recipientAddress || !/^0x[a-fA-F0-9]{40}$/.test(recipientAddress)) {
+    console.error("❌ Invalid recipient address");
+    return { ...result, success: false };
+  }
+
+  // Check wallet initialization
+  if (!agentAccount || !walletClient || !publicClient) {
+    console.error("❌ Agent wallet not initialized");
+    broadcaster?.({
+      type: "WITHDRAW_ERROR",
+      status: "Failed",
+      message: "Agent wallet not initialized",
+      timestamp: new Date().toISOString(),
+    });
+    return { ...result, success: false };
+  }
+
+  let totalGasUsed = 0n;
+  let currentNonce = await publicClient.getTransactionCount({ address: agentAccount.address });
+  
+  // Estimate gas cost per transfer (roughly 65000 gas units * gas price)
+  const gasPrice = await publicClient.getGasPrice();
+  const estimatedGasPerTransfer = 65000n;
+  const gasBuffer = 1.2; // 20% buffer
+
+  // Broadcast start
+  broadcaster?.({
+    type: "WITHDRAW_START",
+    status: "Processing",
+    message: `Starting withdrawal to ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}`,
+    timestamp: new Date().toISOString(),
+  });
+
+  // ========================================================================
+  // STEP 1: Transfer all ERC-20 tokens first
+  // ========================================================================
+  console.log("\n📦 Transferring ERC-20 tokens...");
+  
+  for (const token of WITHDRAWAL_TOKENS) {
+    try {
+      // Get token balance
+      const balance = await publicClient.readContract({
+        address: token.address as `0x${string}`,
+        abi: [{
+          name: 'balanceOf',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [{ name: 'account', type: 'address' }],
+          outputs: [{ type: 'uint256' }]
+        }],
+        functionName: 'balanceOf',
+        args: [agentAccount.address],
+      }) as bigint;
+
+      if (balance === 0n) {
+        console.log(`⏭️ ${token.symbol}: 0 balance, skipping`);
+        result.transfers.push({
+          token: token.address,
+          symbol: token.symbol,
+          amount: "0",
+          status: "skipped",
+        });
+        continue;
+      }
+
+      const formattedBalance = formatEther(balance);
+      console.log(`💰 ${token.symbol}: ${formattedBalance}`);
+      
+      broadcaster?.({
+        type: "WITHDRAW_PROGRESS",
+        status: "Processing",
+        message: `Transferring ${formattedBalance} ${token.symbol}...`,
+        amount: formattedBalance,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Estimate gas for this transfer
+      const gasEstimate = await publicClient.estimateGas({
+        account: agentAccount.address,
+        to: token.address as `0x${string}`,
+        data: "0xa9059cbb" as `0x${string}`, // transfer function selector
+      }).catch(() => estimatedGasPerTransfer);
+
+      // Execute transfer
+      const txHash = await walletClient.writeContract({
+        address: token.address as `0x${string}`,
+        abi: ERC20_TRANSFER_ABI,
+        functionName: 'transfer',
+        args: [recipientAddress as `0x${string}`, balance],
+        nonce: currentNonce,
+        gas: BigInt(Math.ceil(Number(gasEstimate) * gasBuffer)),
+      });
+
+      console.log(`✅ ${token.symbol} transfer tx: ${txHash}`);
+      
+      // Wait for confirmation
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      totalGasUsed += receipt.gasUsed;
+      currentNonce++;
+
+      result.transfers.push({
+        token: token.address,
+        symbol: token.symbol,
+        amount: formattedBalance,
+        txHash,
+        status: receipt.status === "success" ? "success" : "failed",
+      });
+
+      broadcaster?.({
+        type: "WITHDRAW_PROGRESS",
+        status: "Success",
+        message: `Transferred ${formattedBalance} ${token.symbol}`,
+        tx: txHash,
+        amount: formattedBalance,
+        timestamp: new Date().toISOString(),
+      });
+
+    } catch (error: any) {
+      console.error(`❌ Failed to transfer ${token.symbol}:`, error.message);
+      result.transfers.push({
+        token: token.address,
+        symbol: token.symbol,
+        amount: "unknown",
+        status: "failed",
+        error: error.message,
+      });
+
+      broadcaster?.({
+        type: "WITHDRAW_PROGRESS",
+        status: "Failed",
+        message: `Failed to transfer ${token.symbol}: ${error.message}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  // ========================================================================
+  // STEP 2: Transfer native FRAX (gas token) - LAST
+  // ========================================================================
+  console.log("\n💵 Transferring native FRAX (gas token)...");
+  
+  try {
+    const nativeBalance = await publicClient.getBalance({ address: agentAccount.address });
+    
+    // BULLETPROOF APPROACH: Reserve a fixed amount for gas
+    // From empirical testing on Fraxtal:
+    // - Actual gas cost is ~0.0018 FRAX per transfer (21000 gas * ~86 gwei)
+    // - We reserve 0.01 FRAX (10,000,000,000,000,000 wei) = ~5x safety margin
+    // This is simpler and more reliable than trying to estimate dynamic gas prices
+    const FIXED_GAS_RESERVE = 10000000000000000n; // 0.01 FRAX in wei
+    
+    console.log(`📊 Native balance: ${nativeBalance} wei (${formatEther(nativeBalance)} FRAX)`);
+    console.log(`📊 Fixed gas reserve: ${FIXED_GAS_RESERVE} wei (${formatEther(FIXED_GAS_RESERVE)} FRAX)`);
+    
+    if (nativeBalance <= FIXED_GAS_RESERVE) {
+      console.log(`⏭️ Native FRAX: Insufficient balance (${formatEther(nativeBalance)} FRAX <= ${formatEther(FIXED_GAS_RESERVE)} reserve)`);
+      result.nativeTransfer = {
+        amount: "0",
+        status: "skipped",
+        error: `Insufficient balance - need more than ${formatEther(FIXED_GAS_RESERVE)} FRAX for gas`,
+      };
+    } else {
+      // Send balance minus fixed gas reserve
+      const amountToSend = nativeBalance - FIXED_GAS_RESERVE;
+      const formattedAmount = formatEther(amountToSend);
+      
+      console.log(`💰 Sending: ${amountToSend} wei (${formattedAmount} FRAX)`);
+      console.log(`💰 Leaving behind: ${FIXED_GAS_RESERVE} wei (${formatEther(FIXED_GAS_RESERVE)} FRAX) for gas`);
+      
+      broadcaster?.({
+        type: "WITHDRAW_PROGRESS",
+        status: "Processing",
+        message: `Transferring ${formattedAmount} native FRAX...`,
+        amount: formattedAmount,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Execute native transfer - let the network handle gas pricing
+      const txHash = await walletClient.sendTransaction({
+        to: recipientAddress as `0x${string}`,
+        value: amountToSend,
+        nonce: currentNonce,
+        gas: 21000n,
+      });
+
+      console.log(`✅ Native FRAX transfer tx: ${txHash}`);
+      
+      // Wait for confirmation
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      totalGasUsed += receipt.gasUsed;
+
+      result.nativeTransfer = {
+        amount: formattedAmount,
+        txHash,
+        status: receipt.status === "success" ? "success" : "failed",
+      };
+
+      broadcaster?.({
+        type: "WITHDRAW_PROGRESS",
+        status: "Success",
+        message: `Transferred ${formattedAmount} native FRAX`,
+        tx: txHash,
+        amount: formattedAmount,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  } catch (error: any) {
+    console.error("❌ Failed to transfer native FRAX:", error.message);
+    result.nativeTransfer = {
+      amount: "unknown",
+      status: "failed",
+      error: error.message,
+    };
+
+    broadcaster?.({
+      type: "WITHDRAW_PROGRESS",
+      status: "Failed",
+      message: `Failed to transfer native FRAX: ${error.message}`,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  // ========================================================================
+  // FINAL: Summarize results
+  // ========================================================================
+  result.totalGasUsed = formatEther(totalGasUsed * gasPrice);
+  result.success = result.transfers.some(t => t.status === "success") || 
+                   result.nativeTransfer?.status === "success";
+
+  const successfulTransfers = result.transfers.filter(t => t.status === "success").length;
+  const totalTransfers = result.transfers.filter(t => t.status !== "skipped").length;
+
+  console.log("\n📊 Withdrawal Summary:");
+  console.log(`   ERC-20 Transfers: ${successfulTransfers}/${totalTransfers} successful`);
+  console.log(`   Native FRAX: ${result.nativeTransfer?.status || "not attempted"}`);
+  console.log(`   Total Gas Cost: ${result.totalGasUsed} FRAX`);
+
+  broadcaster?.({
+    type: "WITHDRAW_COMPLETE",
+    status: result.success ? "Success" : "Failed",
+    message: result.success 
+      ? `Withdrawal complete! ${successfulTransfers} tokens transferred to ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}`
+      : "Withdrawal failed or partially completed",
+    timestamp: new Date().toISOString(),
+  });
+
+  return result;
 }
 
 export const execute_strategy = createTool({

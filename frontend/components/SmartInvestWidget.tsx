@@ -162,6 +162,27 @@ export default function SmartInvestWidget({
     setMode,
   } = useSmartInvest(walletAddress, initialStrategy);
 
+  // Watch for completion and dispatch event to trigger countdown redirect
+  React.useEffect(() => {
+    if (isComplete && steps.every(s => s.status === "success")) {
+      console.log("🎉 All 5 steps complete - dispatching investmentComplete event");
+      window.dispatchEvent(
+        new CustomEvent("investmentComplete", {
+          detail: {
+            completedSteps: 5,
+            totalSteps: 5,
+            depositAmount: depositAmount,
+            txHashes: steps.filter(s => s.txHash).map(s => s.txHash),
+            strategy: {
+              stablePercent: strategy.stablePercent,
+              yieldPercent: strategy.volatilePercent,
+            },
+          },
+        })
+      );
+    }
+  }, [isComplete, steps, depositAmount, strategy]);
+
   const handleSaveStrategy = async (): Promise<boolean> => {
     const result = await saveStrategy(strategy);
     return result ?? false;
