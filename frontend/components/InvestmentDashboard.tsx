@@ -45,7 +45,24 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
+  AlertOctagon,
+  Flame,
+  Brain,
+  Terminal,
+  Cpu,
+  ArrowRight,
+  ArrowRightLeft,
+  Skull,
+  ShieldAlert,
+  Radio,
+  Hash,
+  FileCode,
+  Network,
+  Siren,
 } from "lucide-react";
+
+// Import API client for rebalance
+import { triggerRebalance, type RebalanceResponse } from "../lib/api";
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -397,6 +414,27 @@ export default function InvestmentDashboard({
   const [withdrawComplete, setWithdrawComplete] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   
+  // Rebalance/Market Crash modal state
+  const [showRebalanceModal, setShowRebalanceModal] = useState(false);
+  const [isRebalancing, setIsRebalancing] = useState(false);
+  const [rebalanceStatus, setRebalanceStatus] = useState<{
+    step: number;
+    status: "pending" | "processing" | "success" | "error";
+    message: string;
+    txHash?: string;
+  }[]>([]);
+  const [rebalanceComplete, setRebalanceComplete] = useState(false);
+  const [rebalanceError, setRebalanceError] = useState<string | null>(null);
+  const [agentReasoning, setAgentReasoning] = useState<string>("");
+  const [rebalanceResult, setRebalanceResult] = useState<RebalanceResponse | null>(null);
+  
+  // Crash simulation dramatic effects state
+  const [crashPhase, setCrashPhase] = useState<"idle" | "detecting" | "analyzing" | "reasoning" | "executing" | "complete">("idle");
+  const [typedText, setTypedText] = useState("");
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  const [showRedFlash, setShowRedFlash] = useState(false);
+  const [countdown, setCountdown] = useState(5);
+  
   // Token balances state
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([
     {
@@ -576,6 +614,136 @@ export default function InvestmentDashboard({
     setWithdrawStatus([]);
     setWithdrawComplete(false);
     setWithdrawError(null);
+  };
+
+  // Handle market crash simulation / rebalance
+  const handleSimulateCrash = async () => {
+    setShowRebalanceModal(true);
+    setIsRebalancing(true);
+    setRebalanceError(null);
+    setRebalanceComplete(false);
+    setAgentReasoning("");
+    setRebalanceResult(null);
+    setRebalanceStatus([]);
+    setCrashPhase("executing");
+    setTerminalLogs([]);
+
+    // Initial status - immediately call API
+    setTerminalLogs(["[INIT] Triggering market crash simulation...", "[API] Calling /api/rebalance endpoint..."]);
+
+    try {
+      const response = await triggerRebalance(0.20);
+      
+      // Process response immediately - no artificial delays
+      setRebalanceResult(response);
+      
+      if (response.agentReasoning) {
+        setAgentReasoning(response.agentReasoning);
+        setTerminalLogs(prev => [...prev, "[AGENT] Reasoning received from ADK-TS agent"]);
+      }
+
+      if (response.success && response.rebalanceResult) {
+        const result = response.rebalanceResult;
+        const newStatus: typeof rebalanceStatus = [];
+
+        // Log based on actual transactions
+        setTerminalLogs(prev => [...prev, `[STATUS] Rebalance status: ${result.status}`]);
+
+        if (result.status === "SUCCESS") {
+          // Process actual transaction results
+          if (result.transactions.swapSfrxETHToFrxETH?.hash) {
+            newStatus.push({
+              step: 1,
+              status: "success",
+              message: "sfrxETH → frxETH (Curve)",
+              txHash: result.transactions.swapSfrxETHToFrxETH.hash,
+            });
+            setTerminalLogs(prev => [...prev, `[TX 1] sfrxETH → frxETH: ${result.transactions.swapSfrxETHToFrxETH!.hash.slice(0, 20)}...`]);
+          }
+          
+          if (result.transactions.swapFrxETHToWFRAX?.hash) {
+            newStatus.push({
+              step: 2,
+              status: "success",
+              message: "frxETH → wFRAX (TriPool)",
+              txHash: result.transactions.swapFrxETHToWFRAX.hash,
+            });
+            setTerminalLogs(prev => [...prev, `[TX 2] frxETH → wFRAX: ${result.transactions.swapFrxETHToWFRAX!.hash.slice(0, 20)}...`]);
+          }
+          
+          if (result.transactions.swapWFRAXToFrxUSD?.hash) {
+            newStatus.push({
+              step: 3,
+              status: "success",
+              message: "wFRAX → frxUSD (TriPool)",
+              txHash: result.transactions.swapWFRAXToFrxUSD.hash,
+            });
+            setTerminalLogs(prev => [...prev, `[TX 3] wFRAX → frxUSD: ${result.transactions.swapWFRAXToFrxUSD!.hash.slice(0, 20)}...`]);
+          }
+          
+          if (result.transactions.stakeFrxUSDToSfrxUSD?.hash) {
+            newStatus.push({
+              step: 4,
+              status: "success",
+              message: "frxUSD → sfrxUSD (Vault)",
+              txHash: result.transactions.stakeFrxUSDToSfrxUSD.hash,
+            });
+            setTerminalLogs(prev => [...prev, `[TX 4] frxUSD → sfrxUSD: ${result.transactions.stakeFrxUSDToSfrxUSD!.hash.slice(0, 20)}...`]);
+          }
+
+          setRebalanceStatus(newStatus);
+          setTerminalLogs(prev => [...prev, 
+            `[COMPLETE] Rebalanced ${result.rebalancePercent}% of sfrxETH → sfrxUSD`,
+            `[AMOUNT] ${result.rebalanceAmount} sfrxETH shifted to stable position`
+          ]);
+
+          // Update market data
+          setApyHistory(prev => [...prev.slice(-5), {
+            time: new Date().toLocaleTimeString().slice(0, 5),
+            sfrxUSD: 4.1,
+            sfrxETH: 4.0,
+          }]);
+          setMarketData(prev => ({ ...prev, sentiment: "bearish", sentimentScore: 25 }));
+          
+        } else if (result.status === "SKIPPED") {
+          setTerminalLogs(prev => [...prev, "[INFO] No sfrxETH to rebalance - skipping"]);
+        } else if (result.status === "DEMO_MODE") {
+          setTerminalLogs(prev => [...prev, "[DEMO] Demo mode - wallet not configured"]);
+        }
+
+        // Mark complete - user must manually close
+        setCrashPhase("complete");
+        setRebalanceComplete(true);
+        
+        // Refresh balances
+        fetchBalances();
+        
+      } else {
+        setTerminalLogs(prev => [...prev, `[ERROR] ${response.error || "Rebalance failed"}`]);
+        setRebalanceError(response.error || "Rebalance request failed");
+      }
+    } catch (error) {
+      console.error("Rebalance error:", error);
+      setTerminalLogs(prev => [...prev, "[ERROR] Failed to connect to server"]);
+      setRebalanceError("Failed to connect to server");
+    } finally {
+      setIsRebalancing(false);
+    }
+  };
+
+  // Reset rebalance modal
+  const resetRebalanceModal = () => {
+    setShowRebalanceModal(false);
+    setRebalanceStatus([]);
+    setRebalanceComplete(false);
+    setRebalanceError(null);
+    setAgentReasoning("");
+    setRebalanceResult(null);
+    setCrashPhase("idle");
+    setTypedText("");
+    setTerminalLogs([]);
+    setShowRedFlash(false);
+    setCountdown(5);
   };
 
   // Fetch wallet balances from backend
@@ -903,6 +1071,22 @@ export default function InvestmentDashboard({
               <div className="mt-4 text-center text-sm text-gray-400">
                 Based on ETH price action & DeFi TVL
               </div>
+
+              {/* Simulate Market Crash Button */}
+              <motion.button
+                onClick={handleSimulateCrash}
+                disabled={isRebalancing}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full mt-4 px-4 py-3 rounded-xl bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-medium flex items-center justify-center gap-2 shadow-lg shadow-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isRebalancing ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Flame className="w-5 h-5" />
+                )}
+                <span>Simulate Market Crash</span>
+              </motion.button>
             </motion.div>
           </div>
         </div>
@@ -1187,6 +1371,252 @@ export default function InvestmentDashboard({
                   )}
                 </div>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Market Crash Simulation Modal - Minimal Design */}
+      <AnimatePresence>
+        {showRebalanceModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative w-full max-w-3xl rounded-xl bg-gray-900 border border-gray-700 shadow-2xl max-h-[90vh] overflow-hidden"
+            >
+              {/* Header */}
+              <div className={clsx(
+                "px-6 py-4 border-b flex items-center justify-between",
+                crashPhase === "complete" 
+                  ? "bg-green-500/10 border-green-500/30"
+                  : "bg-gray-800/50 border-gray-700"
+              )}>
+                <div className="flex items-center gap-3">
+                  {crashPhase === "complete" ? (
+                    <CheckCircle className="w-6 h-6 text-green-400" />
+                  ) : isRebalancing ? (
+                    <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
+                  ) : (
+                    <Activity className="w-6 h-6 text-cyan-400" />
+                  )}
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">
+                      {crashPhase === "complete" 
+                        ? "Rebalance Complete"
+                        : isRebalancing 
+                        ? "Executing Rebalance..."
+                        : "Market Crash Simulation"}
+                    </h3>
+                    <p className="text-xs text-gray-400">
+                      ADK-TS Agent • Fraxtal Mainnet • Chain ID: 252
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={resetRebalanceModal}
+                  className="p-2 rounded-lg hover:bg-gray-700 transition-colors text-gray-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Main Content */}
+              <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-6">
+                
+                {/* Agent Reasoning Section - Always visible when available */}
+                {agentReasoning && (
+                  <div className="rounded-lg bg-gray-800/50 border border-gray-700 overflow-hidden">
+                    <div className="px-4 py-2 bg-gray-800 border-b border-gray-700 flex items-center gap-2">
+                      <Brain className="w-4 h-4 text-purple-400" />
+                      <span className="text-sm font-medium text-purple-300">Agent Reasoning</span>
+                    </div>
+                    <div className="p-4">
+                      <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+                        {agentReasoning}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Live Logs - Terminal Style */}
+                <div className="rounded-lg bg-black border border-gray-700 overflow-hidden">
+                  <div className="px-4 py-2 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Terminal className="w-4 h-4 text-green-400" />
+                      <span className="text-sm font-medium text-gray-300">Live Execution Log</span>
+                    </div>
+                    <span className="text-xs text-gray-500 font-mono">
+                      {terminalLogs.length} events
+                    </span>
+                  </div>
+                  <div className="p-4 font-mono text-xs space-y-1 max-h-48 overflow-y-auto bg-black">
+                    {terminalLogs.length === 0 ? (
+                      <p className="text-gray-600">Waiting for events...</p>
+                    ) : (
+                      terminalLogs.map((log, i) => (
+                        <div
+                          key={i}
+                          className={clsx(
+                            log.includes("[ERROR]") ? "text-red-400" :
+                            log.includes("[TX") ? "text-cyan-400" :
+                            log.includes("[COMPLETE]") || log.includes("[AMOUNT]") ? "text-green-400" :
+                            log.includes("[AGENT]") ? "text-purple-400" :
+                            log.includes("[API]") ? "text-yellow-400" :
+                            "text-gray-400"
+                          )}
+                        >
+                          <span className="text-gray-600 mr-2">{String(i + 1).padStart(2, '0')}</span>
+                          {log}
+                        </div>
+                      ))
+                    )}
+                    {isRebalancing && (
+                      <div className="flex items-center gap-2 text-gray-500">
+                        <span className="text-gray-600 mr-2">{String(terminalLogs.length + 1).padStart(2, '0')}</span>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Processing...</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Transaction Results - Show when available */}
+                {rebalanceStatus.length > 0 && (
+                  <div className="rounded-lg bg-gray-800/50 border border-gray-700 overflow-hidden">
+                    <div className="px-4 py-2 bg-gray-800 border-b border-gray-700 flex items-center gap-2">
+                      <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
+                      <span className="text-sm font-medium text-gray-300">Transactions</span>
+                      <span className="ml-auto text-xs text-green-400">
+                        {rebalanceStatus.filter(s => s.status === "success").length}/{rebalanceStatus.length} confirmed
+                      </span>
+                    </div>
+                    <div className="divide-y divide-gray-700">
+                      {rebalanceStatus.map((status, index) => (
+                        <div key={index} className="px-4 py-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            {status.status === "success" ? (
+                              <CheckCircle className="w-4 h-4 text-green-400" />
+                            ) : status.status === "processing" ? (
+                              <Loader2 className="w-4 h-4 text-yellow-400 animate-spin" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-red-400" />
+                            )}
+                            <span className="text-sm text-gray-300">{status.message}</span>
+                          </div>
+                          {status.txHash && (
+                            <a
+                              href={`https://fraxscan.com/tx/${status.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 font-mono"
+                            >
+                              {status.txHash.slice(0, 10)}...{status.txHash.slice(-6)}
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Balance Changes - Show on complete */}
+                {crashPhase === "complete" && rebalanceResult?.rebalanceResult?.status === "SUCCESS" && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 rounded-lg bg-gray-800/50 border border-gray-700">
+                      <p className="text-xs text-gray-500 uppercase mb-2">Before</p>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">sfrxETH</span>
+                          <span className="text-white font-mono">{rebalanceResult.rebalanceResult.balancesBefore.sfrxETH}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">sfrxUSD</span>
+                          <span className="text-white font-mono">{rebalanceResult.rebalanceResult.balancesBefore.sfrxUSD}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
+                      <p className="text-xs text-green-400 uppercase mb-2">After</p>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">sfrxETH</span>
+                          <span className="text-white font-mono">{rebalanceResult.rebalanceResult.balancesAfter.sfrxETH}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">sfrxUSD</span>
+                          <span className="text-white font-mono">{rebalanceResult.rebalanceResult.balancesAfter.sfrxUSD}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error State */}
+                {rebalanceError && (
+                  <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+                    <div className="flex items-center gap-3">
+                      <XCircle className="w-5 h-5 text-red-400" />
+                      <div>
+                        <p className="text-sm font-medium text-red-300">Error</p>
+                        <p className="text-xs text-red-400/70 mt-1">{rebalanceError}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Success Summary */}
+                {crashPhase === "complete" && !rebalanceError && (
+                  <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
+                    <div className="flex items-center gap-3">
+                      <Shield className="w-6 h-6 text-green-400" />
+                      <div>
+                        <p className="text-sm font-medium text-green-300">
+                          {rebalanceResult?.rebalanceResult?.status === "SUCCESS" 
+                            ? `Shifted ${rebalanceResult.rebalanceResult.rebalancePercent}% of volatile position to stable`
+                            : rebalanceResult?.rebalanceResult?.status === "SKIPPED"
+                            ? "No action needed - portfolio already optimized"
+                            : "Rebalance completed"}
+                        </p>
+                        {rebalanceResult?.rebalanceResult?.rebalanceAmount && (
+                          <p className="text-xs text-green-400/70 mt-1">
+                            Amount: {rebalanceResult.rebalanceResult.rebalanceAmount} sfrxETH → sfrxUSD
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-gray-700 bg-gray-800/50 flex items-center justify-between">
+                <div className="text-xs text-gray-500">
+                  {crashPhase === "complete" 
+                    ? "Click close to return to dashboard"
+                    : isRebalancing
+                    ? "Transactions in progress..."
+                    : "Ready"}
+                </div>
+                <button
+                  onClick={resetRebalanceModal}
+                  className={clsx(
+                    "px-4 py-2 rounded-lg font-medium text-sm transition-colors",
+                    crashPhase === "complete"
+                      ? "bg-green-600 hover:bg-green-500 text-white"
+                      : "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                  )}
+                >
+                  {crashPhase === "complete" ? "Close" : "Cancel"}
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

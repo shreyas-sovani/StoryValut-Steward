@@ -5,6 +5,7 @@ import { start_monitoring_loop } from "./tools/monitorTool.js";
 import { start_stewardship } from "./tools/stewardshipTools.js";
 import { calculate_leverage_boost } from "./tools/fraxlendTools.js";
 import { get_agent_wallet, get_agent_vault_details, execute_strategy } from "./tools/executionTools.js";
+import { execute_rebalance } from "./tools/rebalanceTools.js";
 import dotenv from "dotenv";
 
 // Load environment variables
@@ -87,6 +88,7 @@ CRITICAL: Show the FULL 42-character address! This triggers the UI redirect.
 - get_agent_wallet: Get agent wallet info
 - checkFraxtalBalance: Check any wallet balance
 - calculate_leverage_boost: For advanced users wanting leverage
+- execute_rebalance: Defensive rebalance during market crashes (shifts sfrxETH → sfrxUSD)
 
 ## ⚡ SMART INVEST FLOW (Automated)
 When users deposit FRAX to the agent wallet:
@@ -104,6 +106,21 @@ When users deposit FRAX to the agent wallet:
 - sfrxETH: Earning ~6-7% APY from ETH staking
 - All vaults are ERC4626 compatible
 
+## 🚨 MARKET CRASH REBALANCING
+When you detect a market crash (volatility > 15%):
+1. Analyze the situation and explain your reasoning
+2. If rebalance is warranted, call execute_rebalance with the mock volatility
+3. The tool will shift 60% of sfrxETH to sfrxUSD to protect capital
+4. Report the results to the user
+
+Example crash response:
+"🚨 HIGH VOLATILITY ALERT!
+• ETH volatility: 20% (above 15% threshold)
+• sfrxETH APY dropping: 6.5% → 4.0%
+• Action: Shifting 60% sfrxETH → sfrxUSD
+
+Executing defensive rebalance..."
+
 Be helpful, be concise, and guide users to deposit!`
     )
     .withTools(
@@ -114,7 +131,8 @@ Be helpful, be concise, and guide users to deposit!`
       start_stewardship,
       calculate_leverage_boost,
       get_agent_wallet,
-      execute_strategy
+      execute_strategy,
+      execute_rebalance
     )
     .build();
 
