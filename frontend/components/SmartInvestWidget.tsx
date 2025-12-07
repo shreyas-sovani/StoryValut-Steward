@@ -5,10 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Wallet,
   Activity,
-  RefreshCw,
   Zap,
   ChevronRight,
-  Radio,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -107,35 +105,6 @@ const ConnectionBadge = ({ isConnected }: { isConnected: boolean }) => (
 );
 
 // ============================================================================
-// MODE TOGGLE
-// ============================================================================
-
-const ModeToggle = ({
-  mode,
-  onToggle,
-}: {
-  mode: "idle" | "active";
-  onToggle: () => void;
-}) => (
-  <button
-    onClick={onToggle}
-    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 text-sm text-gray-400 hover:text-white transition-all"
-  >
-    {mode === "idle" ? (
-      <>
-        <Activity className="w-4 h-4" />
-        View Execution
-      </>
-    ) : (
-      <>
-        <RefreshCw className="w-4 h-4" />
-        Back to Strategy
-      </>
-    )}
-  </button>
-);
-
-// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -230,7 +199,6 @@ export default function SmartInvestWidget({
 
           <div className="flex items-center gap-3">
             <ConnectionBadge isConnected={isConnected} />
-            <ModeToggle mode={mode} onToggle={handleToggleMode} />
           </div>
         </div>
       </div>
@@ -269,6 +237,19 @@ export default function SmartInvestWidget({
                     automatically invest according to your strategy.
                   </p>
 
+                  {/* Minimum FRAX Warning - Prominent Position */}
+                  <div className="mt-4 p-4 rounded-xl bg-yellow-500/15 border-2 border-yellow-500/50 shadow-lg shadow-yellow-500/10">
+                    <div className="flex items-center justify-center gap-3">
+                      <span className="text-2xl">⚠️</span>
+                      <div className="text-left">
+                        <p className="text-base text-yellow-300 font-semibold">Minimum 25 FRAX recommended</p>
+                        <p className="text-sm text-yellow-200/80 mt-0.5">
+                          Smaller deposits may fail due to swap slippage and gas costs.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Wallet Address - FULL ADDRESS for deposits */}
                   <div className="mt-6 flex flex-col items-center gap-2">
                     <span className="text-sm text-gray-400">Deposit FRAX to Agent Wallet:</span>
@@ -285,19 +266,6 @@ export default function SmartInvestWidget({
                     >
                       📋 Click to copy
                     </button>
-                  </div>
-
-                  {/* Minimum FRAX Warning */}
-                  <div className="mt-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-                    <div className="flex items-start gap-2">
-                      <span className="text-yellow-400 flex-shrink-0">⚠️</span>
-                      <div>
-                        <p className="text-sm text-yellow-200 font-medium">Minimum 25 FRAX recommended</p>
-                        <p className="text-xs text-yellow-200/70 mt-0.5">
-                          Smaller deposits may fail due to swap slippage and gas costs on Curve pools.
-                        </p>
-                      </div>
-                    </div>
                   </div>
 
                   {/* How it works */}
@@ -340,19 +308,6 @@ export default function SmartInvestWidget({
                   </div>
                 </div>
               </div>
-
-              {/* Test Button (Dev Mode) */}
-              {process.env.NODE_ENV === "development" && (
-                <div className="text-center pt-4">
-                  <button
-                    onClick={triggerSmartInvest}
-                    className="px-4 py-2 rounded-lg bg-purple-500/20 border border-purple-500/30 text-purple-400 text-sm hover:bg-purple-500/30 transition-colors"
-                  >
-                    <Radio className="w-4 h-4 inline mr-2" />
-                    Trigger Test Investment
-                  </button>
-                </div>
-              )}
             </motion.div>
           ) : (
             <motion.div
