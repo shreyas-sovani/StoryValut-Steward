@@ -1,193 +1,193 @@
-# 🏛️ StoryVault Steward
+# StoryVault Steward
 
-A DeFi advisor agent that analyzes users' life stories to recommend personalized yield strategies on the Fraxtal network. **Now with a beautiful web interface!**
+Autonomous AI agent that manages DeFi investments on Fraxtal. Tell it your financial story, deposit FRAX, and it handles the rest—wrapping, swapping, staking, rebalancing.
 
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js >= 22.0.0
-
-### Installation
-
-```bash
-# Install dependencies
-npm install
-cd frontend && npm install && cd ..
-```
-
-### Configuration
-
-1. Create `.env` file with your API key:
-```bash
-GOOGLE_API_KEY=your_google_api_key_here
-FRAXTAL_RPC_URL=https://rpc.frax.com
-ATP_WALLET_PRIVATE_KEY=your_wallet_private_key  # Optional
-```
-
-2. Frontend is pre-configured in `frontend/.env.local`
-
-### Run
-
-#### 🌐 Web Interface (Recommended)
-Start both API server and frontend:
-```bash
-./start-dev.sh
-```
-Then open **http://localhost:3000** in your browser!
-
-#### 💻 CLI Mode
-```bash
-npm start
-```
-
-#### 🔧 API Server Only
-```bash
-npm run server
-```
-
-## 🎯 Features
-
-### Phase 5: Web Interface ✨ NEW!
-- **Real-time Chat**: SSE streaming for instant AI responses
-- **Dark Mode UI**: Beautiful purple/gold DeFi aesthetic
-- **Vault Display**: Visual representation of deployed strategies
-- **Session Management**: Persistent conversation history
-- **Split View**: Chat on left, vault details on right
-
-### Core Features
-- **Story Analysis**: Share your financial story and get personalized recommendations
-- **Real-time Yields**: Fetches current APY for sFRAX and sfrxETH on Fraxtal
-- **ATP Integration**: Deploy strategies directly to Frax's Autonomous Tokenized Portfolio
-- **Risk Profiling**: Intelligent matching of strategies to user risk tolerance
-- **Three Interfaces**: Web UI, REST API, or Terminal CLI
-
-## 🛠️ Tech Stack
-
-### Backend
-- **ADK-TS**: AI agent framework with tool integration
-- **Hono**: Lightweight web framework for API
-- **Viem**: Ethereum blockchain interactions
-- **TypeScript**: Type-safe development
-
-### Frontend
-- **Next.js 14**: React with App Router
-- **Tailwind CSS**: Utility-first styling
-- **Lucide Icons**: Beautiful icons
-- **SSE**: Real-time streaming
-
-### Blockchain
-- **Fraxtal L2**: High-yield DeFi strategies on Frax's Layer 2
-- **Real Contracts**: Direct on-chain data fetching
-
-## 📋 Available Strategies
-
-- **sFRAX**: ~4.5% APY - Low risk, stablecoin yield
-- **sfrxETH**: ~3.8% APY - Medium risk, ETH liquid staking
-
-## 🏗️ Project Structure
-
-```
-storyvault-steward/
-├── src/
-│   ├── agent.ts          # Exportable agent configuration
-│   ├── cli.ts            # Terminal interface
-│   ├── server.ts         # REST API with SSE streaming
-│   └── tools/
-│       ├── fraxTools.ts      # Fraxtal yield data
-│       └── realAtpTool.ts    # ATP deployment
-├── frontend/             # Next.js web interface
-│   ├── app/
-│   │   ├── page.tsx          # Main page
-│   │   ├── layout.tsx        # Root layout
-│   │   └── globals.css       # Global styles
-│   ├── components/
-│   │   ├── ChatInterface.tsx # Chat UI with SSE
-│   │   └── VaultCard.tsx     # Vault display
-│   └── lib/
-│       ├── api.ts            # API client
-│       └── utils.ts          # Utilities
-├── project_context/      # Specification files
-├── start-dev.sh          # Startup script
-└── package.json
-```
-
-## 🌐 Fraxtal Network
-
-- **Chain ID**: 252
-- **RPC**: https://rpc.frax.com
-- **Explorer**: https://fraxscan.com
-- **ATP Dashboard**: https://app.iqai.com/
-
-## 📡 API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check |
-| POST | `/api/chat` | Chat with SSE streaming |
-| POST | `/api/chat/simple` | Chat without streaming |
-| GET | `/api/sessions` | List active sessions |
-| DELETE | `/api/session/:id` | Delete a session |
-
-## 🎨 Screenshots
-
-### Web Interface
-- **Split View**: Chat interface on left, vault card on right
-- **Dark Theme**: Deep space background with purple/gold accents
-- **Real-time Streaming**: Watch AI responses appear in real-time
-- **Example Prompts**: Quick start with pre-built scenarios
-
-## 📚 Documentation
-
-- [Backend README](./PHASE_5_BACKEND_COMPLETE.md) - API server details
-- [Frontend README](./frontend/README.md) - Frontend setup and components
-- [ADK Spec](./project_context/adk_spec.md) - Agent framework documentation
-- [Fraxtal Spec](./project_context/fraxtal_spec.md) - Fraxtal integration details
-
-## � Deployment
-
-### Backend
-Deploy the API server to any Node.js hosting:
-```bash
-npm run server
-```
-
-### Frontend
-Deploy to Vercel (recommended):
-```bash
-cd frontend
-vercel deploy
-```
-
-Set environment variable: `NEXT_PUBLIC_API_URL=your-api-url`
-
-## 🧪 Testing
-
-### Manual Testing Flow
-1. Start both servers: `./start-dev.sh`
-2. Open http://localhost:3000
-3. Enter a life story prompt
-4. Watch streaming response
-5. See vault card populate when strategy deploys
-
-### Example Prompts
-```
-"I'm a 28-year-old teacher saving for a house in 3 years. Risk-averse."
-"College student, 21, learning about DeFi. Want safe yields."
-"Entrepreneur, 35, high risk tolerance. Looking for growth."
-```
-
-## 🏆 Development Phases
-
-- ✅ **Phase 1**: Basic scaffolding with ADK
-- ✅ **Phase 2**: Real Fraxtal blockchain integration
-- ✅ **Phase 3**: ATP deployment simulation
-- ✅ **Phase 4**: Real ATP integration + wallet verification
-- ✅ **Phase 5**: REST API + Web Interface
-
-## �📝 License
-
-MIT
+Built with [IQAI ADK-TS](https://docs.iqai.com) + Gemini 2.0 Flash. Executes real transactions on Fraxtal L2.
 
 ---
 
-**Built with 💜 for the Fraxtal Hackathon**
+## What It Does
+
+1. **Chat** → AI analyzes your story (risk tolerance, timeline, goals)
+2. **Recommend** → Suggests allocation split (sfrxUSD for stable yield, sfrxETH for ETH exposure)
+3. **Deposit** → You send FRAX to the agent's wallet
+4. **Execute** → Agent autonomously wraps, swaps via Curve, stakes into vaults
+5. **Monitor** → Real-time dashboard tracks your positions
+
+The agent runs a watcher loop that detects deposits and triggers a 5-step investment sequence without human intervention.
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Frontend (Next.js 14)                                          │
+│  ChatInterface → SmartInvestWidget → InvestmentDashboard        │
+│         ↓ SSE streaming                                         │
+├─────────────────────────────────────────────────────────────────┤
+│  Backend (Hono + ADK-TS)                                        │
+│  • Gemini 2.0 Flash agent with DeFi tools                       │
+│  • Autonomous watcher (5s interval)                             │
+│  • SSE broadcasting for real-time UI updates                    │
+├─────────────────────────────────────────────────────────────────┤
+│  Fraxtal L2 (Chain 252)                                         │
+│  • Curve TriPool: wFRAX ↔ frxUSD ↔ frxETH                       │
+│  • Curve frxETH/sfrxETH pool                                    │
+│  • MintRedeemer for sfrxUSD staking                             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Investment Flow
+
+When you deposit FRAX, the agent executes:
+
+| Step | Action | Contract |
+|------|--------|----------|
+| 1 | Wrap FRAX → wFRAX | `0xfc00...0002` |
+| 2 | Swap wFRAX → frxUSD (stable leg) | Curve TriPool |
+| 3 | Stake frxUSD → sfrxUSD | MintRedeemer |
+| 4 | Swap wFRAX → frxETH (volatile leg) | Curve TriPool |
+| 5 | Swap frxETH → sfrxETH | Curve frxETH/sfrxETH |
+
+Split ratio based on your risk profile (e.g., 60% stable / 40% volatile).
+
+---
+
+## Yield Products
+
+| Token | APY | Backing | Use Case |
+|-------|-----|---------|----------|
+| **sfrxUSD** | ~4.1% | US Treasuries (BlackRock BUIDL, Superstate USTB) | Capital preservation |
+| **sfrxETH** | ~5-6% | ETH staking rewards | Growth exposure |
+
+---
+
+## Quick Start
+
+```bash
+# Install
+npm install
+cd frontend && npm install && cd ..
+
+# Configure
+cp .env.example .env
+# Add: GOOGLE_API_KEY, ATP_WALLET_PRIVATE_KEY
+
+# Run (both servers)
+./start-dev.sh
+# → Frontend: http://localhost:3000
+# → Backend: http://localhost:3001
+```
+
+Requirements: Node.js ≥ 22
+
+---
+
+## API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/chat` | POST | Chat with SSE streaming |
+| `/api/smart-invest` | POST | Trigger investment sequence |
+| `/api/funding/stream` | GET | SSE stream for real-time updates |
+| `/api/rebalance` | POST | Crash rebalancing (sfrxETH → sfrxUSD) |
+| `/api/withdraw` | POST | Withdraw all funds to recipient |
+| `/api/wallet/:address/balances` | GET | Token balances |
+
+---
+
+## Rebalancing
+
+The agent can execute defensive rebalancing during market volatility:
+
+```
+sfrxETH → frxETH → wFRAX → frxUSD → sfrxUSD
+```
+
+Shifts volatile ETH exposure to stable Treasury-backed yield. Triggered via `/api/rebalance` or through chat commands.
+
+---
+
+## Tech Stack
+
+**Backend**: Hono, ADK-TS, Viem, TypeScript  
+**Frontend**: Next.js 14, Tailwind, Framer Motion, Recharts  
+**AI**: Gemini 2.0 Flash  
+**Chain**: Fraxtal L2 (252)  
+**DEX**: Curve pools (TriPool + frxETH/sfrxETH stable-ng)
+
+---
+
+## Key Files
+
+```
+src/
+├── agent.ts              # ADK agent config + system prompt
+├── server.ts             # Hono server + watcher loop
+└── tools/
+    ├── smartInvestTools.ts   # 5-step investment sequence
+    ├── rebalanceTools.ts     # Crash rebalancing
+    ├── curveTriPool.ts       # TriPool swap helpers
+    ├── curveFrxEthPool.ts    # frxETH/sfrxETH swaps
+    └── executionTools.ts     # Withdraw + wallet ops
+
+frontend/
+├── components/
+│   ├── ChatInterface.tsx     # AI chat with strategy detection
+│   ├── SmartInvestWidget.tsx # 5-step execution UI
+│   └── InvestmentDashboard.tsx # Portfolio monitoring
+└── context/
+    └── AppFlowContext.tsx    # Stage management
+```
+
+---
+
+## Contracts (Fraxtal Mainnet)
+
+| Contract | Address |
+|----------|---------|
+| wFRAX | `0xfc00000000000000000000000000000000000002` |
+| frxUSD | `0xfc00000000000000000000000000000000000001` |
+| sfrxUSD | `0xfc00000000000000000000000000000000000008` |
+| frxETH | `0xfc00000000000000000000000000000000000006` |
+| sfrxETH | `0xfc00000000000000000000000000000000000005` |
+| Curve TriPool | `0xa0D3911349e701A1F49C1Ba2dDA34b4ce9636569` |
+| Curve frxETH/sfrxETH | `0xF2f426Fe123De7b769b2D4F8c911512F065225d3` |
+| MintRedeemer | `0xBFc4D34Db83553725eC6c768da71D2D9c1456B55` |
+
+---
+
+## Why Curve Instead of Fraxswap?
+
+Fraxswap V2 on Fraxtal returns `TWAMM_OUT_OF_DATE` errors due to stale oracle state. Curve pools provide consistent liquidity and a standard `exchange(i, j, dx, min_dy)` interface without TWAMM complexity.
+
+---
+
+## Deployment
+
+**Frontend**: Vercel  
+**Backend**: Railway (persistent watcher loop)  
+**Network**: Fraxtal Mainnet
+
+```bash
+# Build
+npm run build
+cd frontend && npm run build
+```
+
+---
+
+## Hackathon
+
+Built for **IQAI Agent Arena** (Nov 10 - Dec 9, 2025).  
+Track: ADK-TS.  
+Requirement: Deploy tokenized agent on ATP.
+
+---
+
+## License
+
+MIT
