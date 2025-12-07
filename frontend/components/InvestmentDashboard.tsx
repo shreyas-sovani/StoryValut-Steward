@@ -294,10 +294,19 @@ const TokenBalanceCard = ({
 // MARKET SENTIMENT GAUGE
 // ============================================================================
 const SentimentGauge = ({ sentiment, score }: { sentiment: string; score: number }) => {
+  // Cap score at 100% to prevent overflow
+  const cappedScore = Math.min(100, Math.max(0, score));
+  
   const getColor = () => {
-    if (score >= 60) return "#22c55e";
-    if (score >= 40) return "#eab308";
-    return "#ef4444";
+    if (cappedScore >= 60) return "#22c55e"; // bullish - green
+    if (cappedScore >= 40) return "#eab308"; // neutral - yellow
+    return "#ef4444"; // bearish - red
+  };
+
+  const getEmoji = () => {
+    if (sentiment === "bullish") return "📈";
+    if (sentiment === "bearish") return "📉";
+    return "⚖️";
   };
 
   return (
@@ -319,7 +328,7 @@ const SentimentGauge = ({ sentiment, score }: { sentiment: string; score: number
             strokeWidth="8"
             strokeLinecap="round"
             initial={{ pathLength: 0 }}
-            animate={{ pathLength: score / 100 }}
+            animate={{ pathLength: cappedScore / 100 }}
             transition={{ duration: 1, ease: "easeOut" }}
           />
         </svg>
@@ -329,18 +338,19 @@ const SentimentGauge = ({ sentiment, score }: { sentiment: string; score: number
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
         >
-          <span className="text-2xl font-bold text-white">{score}</span>
+          <span className="text-2xl font-bold text-white">{Math.round(cappedScore)}%</span>
         </motion.div>
       </div>
       <p
         className={clsx(
-          "text-sm font-medium mt-2",
+          "text-sm font-medium mt-2 flex items-center gap-1",
           sentiment === "bullish" && "text-green-400",
           sentiment === "bearish" && "text-red-400",
           sentiment === "neutral" && "text-yellow-400"
         )}
       >
-        {sentiment.toUpperCase()}
+        <span>{getEmoji()}</span>
+        <span>{sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}</span>
       </p>
     </div>
   );
@@ -434,6 +444,9 @@ export default function InvestmentDashboard({
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   const [showRedFlash, setShowRedFlash] = useState(false);
   const [countdown, setCountdown] = useState(5);
+  
+  // Crash confirmation modal state
+  const [showCrashConfirmModal, setShowCrashConfirmModal] = useState(false);
   
   // Token balances state
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([
@@ -839,14 +852,38 @@ export default function InvestmentDashboard({
     return () => clearInterval(interval);
   }, []);
 
-  // Allocation data for pie chart
-  const allocationData = investmentData ? [
-    { name: "Stable (sfrxUSD)", value: investmentData.strategy.stablePercent, color: "#22c55e" },
-    { name: "Yield (sfrxETH)", value: investmentData.strategy.yieldPercent, color: "#a855f7" },
-  ] : [
-    { name: "Stable", value: 60, color: "#22c55e" },
-    { name: "Yield", value: 40, color: "#a855f7" },
-  ];
+  // Allocation data for pie chart - calculate from actual holdings if available
+  const calculateAllocationFromBalances = () => {
+    const sfrxUSDBalance = tokenBalances.find(t => t.symbol === "sfrxUSD")?.balanceUSD || 0;
+    const sfrxETHBalance = tokenBalances.find(t => t.symbol === "sfrxETH")?.balanceUSD || 0;
+    const totalStaked = sfrxUSDBalance + sfrxETHBalance;
+    
+    if (totalStaked > 0.01) {
+      // Use actual holdings for allocation
+      const stablePercent = Math.round((sfrxUSDBalance / totalStaked) * 100);
+      const yieldPercent = 100 - stablePercent;
+      return [
+        { name: "🛡️ Stable (sfrxUSD)", value: stablePercent, color: "#22c55e" },
+        { name: "📈 Yield (sfrxETH)", value: yieldPercent, color: "#a855f7" },
+      ];
+    }
+    
+    // Fall back to strategy from investmentData
+    if (investmentData) {
+      return [
+        { name: "🛡️ Stable (sfrxUSD)", value: investmentData.strategy.stablePercent, color: "#22c55e" },
+        { name: "📈 Yield (sfrxETH)", value: investmentData.strategy.yieldPercent, color: "#a855f7" },
+      ];
+    }
+    
+    // Default
+    return [
+      { name: "Stable", value: 60, color: "#22c55e" },
+      { name: "Yield", value: 40, color: "#a855f7" },
+    ];
+  };
+
+  const allocationData = calculateAllocationFromBalances();
 
   return (
     <div className="min-h-full pb-8 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white">
@@ -1074,7 +1111,7 @@ export default function InvestmentDashboard({
 
               {/* Simulate Market Crash Button */}
               <motion.button
-                onClick={handleSimulateCrash}
+                onClick={() => setShowCrashConfirmModal(true)}
                 disabled={isRebalancing}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -1179,6 +1216,67 @@ export default function InvestmentDashboard({
           </div>
         </motion.div>
       </div>
+
+      {/* Crash Confirmation Modal */}
+      <AnimatePresence>
+        {showCrashConfirmModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={(e) => e.target === e.currentTarget && setShowCrashConfirmModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gray-900 border border-orange-500/30 rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-3 rounded-xl bg-orange-500/20">
+                  <AlertTriangle className="w-6 h-6 text-orange-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">Confirm Simulation</h3>
+                  <p className="text-sm text-gray-400">Market crash demo</p>
+                </div>
+              </div>
+
+              {/* Warning Content */}
+              <div className="mb-6 p-4 rounded-xl bg-orange-500/10 border border-orange-500/30">
+                <p className="text-sm text-orange-200 leading-relaxed">
+                  This will simulate a market volatility event and trigger the AI agent to rebalance your portfolio from volatile (sfrxETH) to stable (sfrxUSD) positions.
+                </p>
+                <p className="text-xs text-orange-200/70 mt-3">
+                  ⚠️ <strong>Demo only</strong> — Real transactions will be executed on Fraxtal if you have holdings.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCrashConfirmModal(false)}
+                  className="flex-1 px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-gray-300 font-medium hover:bg-gray-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCrashConfirmModal(false);
+                    handleSimulateCrash();
+                  }}
+                  className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-red-600 to-orange-600 text-white font-medium hover:from-red-500 hover:to-orange-500 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Flame className="w-4 h-4" />
+                  Confirm & Run
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Withdraw Modal */}
       <AnimatePresence>

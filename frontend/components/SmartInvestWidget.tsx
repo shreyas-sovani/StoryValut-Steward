@@ -287,6 +287,19 @@ export default function SmartInvestWidget({
                     </button>
                   </div>
 
+                  {/* Minimum FRAX Warning */}
+                  <div className="mt-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                    <div className="flex items-start gap-2">
+                      <span className="text-yellow-400 flex-shrink-0">⚠️</span>
+                      <div>
+                        <p className="text-sm text-yellow-200 font-medium">Minimum 25 FRAX recommended</p>
+                        <p className="text-xs text-yellow-200/70 mt-0.5">
+                          Smaller deposits may fail due to swap slippage and gas costs on Curve pools.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* How it works */}
                   <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
                     {[

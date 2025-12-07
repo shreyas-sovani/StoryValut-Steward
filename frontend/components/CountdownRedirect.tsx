@@ -10,7 +10,10 @@ import {
   TrendingUp,
   Shield,
   Zap,
-  BarChart3
+  BarChart3,
+  ExternalLink,
+  X,
+  FileText
 } from "lucide-react";
 
 interface InvestmentData {
@@ -142,6 +145,7 @@ export default function CountdownRedirect({
 }: CountdownRedirectProps) {
   const [seconds, setSeconds] = useState(30);
   const [isHovering, setIsHovering] = useState(false);
+  const [showTxModal, setShowTxModal] = useState(false);
 
   // Countdown timer
   useEffect(() => {
@@ -160,6 +164,15 @@ export default function CountdownRedirect({
   const handleManualRedirect = useCallback(() => {
     onManualRedirect();
   }, [onManualRedirect]);
+
+  // Transaction step labels
+  const txStepLabels = [
+    "Wrap FRAX → wFRAX",
+    "Swap wFRAX → frxUSD (Curve)",
+    "Stake frxUSD → sfrxUSD",
+    "Swap wFRAX → frxETH (Curve)",
+    "Swap frxETH → sfrxETH (Curve)",
+  ];
 
   return (
     <div className="relative h-full flex items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 overflow-hidden">
@@ -297,8 +310,21 @@ export default function CountdownRedirect({
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.6 }}
-            className="flex justify-center"
+            className="flex justify-center gap-4"
           >
+            {/* View Transactions Button */}
+            {investmentData?.txHashes && investmentData.txHashes.length > 0 && (
+              <motion.button
+                onClick={() => setShowTxModal(true)}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="px-6 py-4 rounded-xl font-semibold text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 transition-all flex items-center gap-2"
+              >
+                <FileText className="w-5 h-5" />
+                View Transactions
+              </motion.button>
+            )}
+            
             <motion.button
               onClick={handleManualRedirect}
               onMouseEnter={() => setIsHovering(true)}
@@ -351,6 +377,87 @@ export default function CountdownRedirect({
           </motion.div>
         </div>
       </motion.div>
+
+      {/* Transaction Verification Modal */}
+      <AnimatePresence>
+        {showTxModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={(e) => e.target === e.currentTarget && setShowTxModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gray-900 border border-cyan-500/30 rounded-2xl p-6 max-w-lg w-full shadow-2xl shadow-cyan-500/10"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-xl bg-cyan-500/20">
+                    <FileText className="w-6 h-6 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Transaction Verification</h3>
+                    <p className="text-sm text-gray-400">5 transactions on Fraxscan</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowTxModal(false)}
+                  className="p-2 rounded-lg hover:bg-gray-800 transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              {/* Transaction List */}
+              <div className="space-y-3 mb-6">
+                {investmentData?.txHashes?.map((hash, index) => (
+                  <motion.div
+                    key={hash}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-gray-800/50 border border-gray-700 hover:border-cyan-500/30 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-green-500/20 border border-green-500/50 flex items-center justify-center flex-shrink-0">
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white">
+                        Step {index + 1}: {txStepLabels[index]}
+                      </p>
+                      <p className="text-xs text-gray-500 font-mono truncate">
+                        {hash}
+                      </p>
+                    </div>
+                    <a
+                      href={`https://fraxscan.com/tx/${hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-colors text-xs font-medium flex-shrink-0"
+                    >
+                      <span>View</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Close Button */}
+              <button
+                onClick={() => setShowTxModal(false)}
+                className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white font-medium hover:bg-gray-700 transition-colors"
+              >
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -836,12 +836,6 @@ export default function ChatInterface({
                       <span>✅</span>
                       Accept & Continue
                     </button>
-                    <button
-                      onClick={() => setDetectedStrategy(null)}
-                      className="px-4 py-3 rounded-xl font-medium text-gray-400 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-all"
-                    >
-                      Modify
-                    </button>
                   </div>
                 </div>
               </div>

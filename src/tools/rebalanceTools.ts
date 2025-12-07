@@ -559,9 +559,11 @@ Decision: Shifting ${rebalancePercent}% of sfrxETH (${formatEther(rebalanceAmoun
     // STEP 1: Swap sfrxETH -> frxETH (Curve Pool - reverse direction)
     // ========================================================================
     addLog("📝 STEP 1: Swap sfrxETH -> frxETH via Curve...");
-    broadcastRebalanceLog(1, "Processing", "Swapping sfrxETH → frxETH via Curve pool...");
+    broadcastRebalanceLog(1, "Processing", "Preparing sfrxETH → frxETH swap...");
+    await new Promise(r => setTimeout(r, 100)); // Allow SSE to flush
 
     // Approve Curve pool for sfrxETH
+    broadcastRebalanceLog(1, "Processing", "Approving sfrxETH for Curve pool...");
     const approveNonce1 = await getNextNonce();
     const approveSfrxETHTx = await walletClient.writeContract({
       chain: fraxtal,
@@ -575,6 +577,7 @@ Decision: Shifting ${rebalancePercent}% of sfrxETH (${formatEther(rebalanceAmoun
     await waitForTx(approveSfrxETHTx, "Approve sfrxETH for Curve");
 
     // Quote expected output (sfrxETH index = 1, frxETH index = 0)
+    broadcastRebalanceLog(1, "Processing", "Quoting Curve pool exchange rate...");
     const expectedFrxETH = (await publicClient.readContract({
       address: CONTRACTS.curveFrxETHSfrxETH,
       abi: CURVE_POOL_ABI,
@@ -585,6 +588,7 @@ Decision: Shifting ${rebalancePercent}% of sfrxETH (${formatEther(rebalanceAmoun
     const minFrxETH = (expectedFrxETH * 995n) / 1000n; // 0.5% slippage
 
     // Execute Curve swap (sfrxETH -> frxETH)
+    broadcastRebalanceLog(1, "Processing", "Executing Curve swap...");
     const swapNonce1 = await getNextNonce();
     const swapSfrxETHTx = await walletClient.writeContract({
       chain: fraxtal,
@@ -604,7 +608,8 @@ Decision: Shifting ${rebalancePercent}% of sfrxETH (${formatEther(rebalanceAmoun
     // STEP 2: Swap frxETH -> frxUSD via Curve TriPool
     // ========================================================================
     addLog("📝 STEP 2: Swap frxETH -> frxUSD via Curve TriPool...");
-    broadcastRebalanceLog(2, "Processing", "Swapping frxETH → frxUSD via Curve TriPool...");
+    broadcastRebalanceLog(2, "Processing", "Preparing TriPool swap frxETH → frxUSD...");
+    await new Promise(r => setTimeout(r, 100)); // Allow SSE to flush
 
     // Get actual frxETH balance received
     const frxETHBalance = await getTokenBalance(CONTRACTS.frxETH, agentAddress);
@@ -616,6 +621,7 @@ Decision: Shifting ${rebalancePercent}% of sfrxETH (${formatEther(rebalanceAmoun
     }
 
     // Execute TriPool swap: frxETH → frxUSD
+    broadcastRebalanceLog(2, "Processing", "Executing TriPool exchange (frxETH→wFRAX→frxUSD)...");
     // IMPORTANT: walletClient must have account attached for signing
     const tripoolResult = await swapFrxEthToFrxUsd(
       walletClient,
@@ -637,7 +643,8 @@ Decision: Shifting ${rebalancePercent}% of sfrxETH (${formatEther(rebalanceAmoun
     // STEP 3: Stake frxUSD -> sfrxUSD via MintRedeemer
     // ========================================================================
     addLog("📝 STEP 3: Stake frxUSD -> sfrxUSD...");
-    broadcastRebalanceLog(3, "Processing", "Staking frxUSD → sfrxUSD via MintRedeemer...");
+    broadcastRebalanceLog(3, "Processing", "Preparing to stake frxUSD → sfrxUSD...");
+    await new Promise(r => setTimeout(r, 100)); // Allow SSE to flush
 
     // Get frxUSD balance
     const frxUSDBalance = await getTokenBalance(CONTRACTS.frxUSD, agentAddress);
@@ -649,6 +656,7 @@ Decision: Shifting ${rebalancePercent}% of sfrxETH (${formatEther(rebalanceAmoun
     }
 
     // Approve MintRedeemer for frxUSD
+    broadcastRebalanceLog(3, "Processing", "Approving frxUSD for MintRedeemer vault...");
     const approveNonce3 = await getNextNonce();
     const approveFrxUSDTx = await walletClient.writeContract({
       chain: fraxtal,
@@ -662,6 +670,7 @@ Decision: Shifting ${rebalancePercent}% of sfrxETH (${formatEther(rebalanceAmoun
     await waitForTx(approveFrxUSDTx, "Approve frxUSD for MintRedeemer");
 
     // Stake frxUSD -> sfrxUSD
+    broadcastRebalanceLog(3, "Processing", "Depositing into sfrxUSD vault...");
     const stakeNonce = await getNextNonce();
     const stakeFrxUSDTx = await walletClient.writeContract({
       chain: fraxtal,
