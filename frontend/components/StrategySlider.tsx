@@ -69,13 +69,13 @@ export default function StrategySlider({
       name: "Stable",
       value: localValue,
       color: "#06b6d4", // Cyan
-      description: "sfrxUSD Vault (~4.1% APY)",
+      description: "sfrxUSD (~4.1% APY)",
     },
     {
-      name: "Growth",
+      name: "Yield",
       value: 100 - localValue,
       color: "#a855f7", // Purple
-      description: "sfrxETH Vault (~6-7% APY)",
+      description: "sfrxETH (~5.3% APY)",
     },
   ];
 
@@ -170,7 +170,7 @@ export default function StrategySlider({
               <div className="flex-1">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-white">
-                    Stable (sfrxUSD)
+                    🛡️ Stable (sfrxUSD)
                   </span>
                   <span className="text-lg font-bold text-cyan-400">
                     {localValue}%
@@ -190,14 +190,14 @@ export default function StrategySlider({
               <div className="flex-1">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-white">
-                    Growth (sfrxETH)
+                    📈 Yield (sfrxETH)
                   </span>
                   <span className="text-lg font-bold text-purple-400">
                     {100 - localValue}%
                   </span>
                 </div>
                 <p className="text-xs text-gray-400">
-                  ~6-7% APY · ETH Staking Yield
+                  ~5.3% APY · ETH Staking Yield
                 </p>
               </div>
             </div>
@@ -207,7 +207,7 @@ export default function StrategySlider({
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-400">Expected Blended APY</span>
                 <span className="text-lg font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
-                  ~{((localValue * 4.1 + (100 - localValue) * 6.5) / 100).toFixed(1)}%
+                  ~{((localValue * 4.1 + (100 - localValue) * 5.3) / 100).toFixed(1)}%
                 </span>
               </div>
             </div>
@@ -310,7 +310,7 @@ export default function StrategySlider({
 
         {/* Slider & Labels */}
         <div className="flex flex-col justify-center space-y-6">
-          {/* Conservative Label */}
+          {/* Stable Label */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
               <Shield className="w-5 h-5 text-cyan-400" />
@@ -318,14 +318,14 @@ export default function StrategySlider({
             <div className="flex-1">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-white">
-                  Conservative
+                  🛡️ Stable (sfrxUSD ~4.1% APY)
                 </span>
                 <span className="text-sm font-bold text-cyan-400">
                   {localValue}%
                 </span>
               </div>
               <p className="text-xs text-gray-500">
-                sfrxUSD Vault · ~5% APY · Low Risk
+                US Treasury Backed · Low Risk
               </p>
             </div>
           </div>
@@ -370,20 +370,20 @@ export default function StrategySlider({
             </div>
           </div>
 
-          {/* Growth Label */}
+          {/* Yield Label */}
           <div className="flex items-center gap-3 mt-2">
             <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-purple-400" />
             </div>
             <div className="flex-1">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white">Growth</span>
+                <span className="text-sm font-medium text-white">📈 Yield (sfrxETH ~5.3% APY)</span>
                 <span className="text-sm font-bold text-purple-400">
                   {100 - localValue}%
                 </span>
               </div>
               <p className="text-xs text-gray-500">
-                sfrxETH Vault · ~8-12% APY · Higher Risk
+                ETH Staking Yield · Growth
               </p>
             </div>
           </div>

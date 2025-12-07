@@ -72,32 +72,32 @@ function AppContent() {
     switch (stage) {
       case "chat":
         return (
-          <div className="h-full grid grid-cols-1 lg:grid-cols-2">
-            {/* Chat Interface - Left Side */}
-            <div className="h-full flex flex-col overflow-hidden border-r border-purple-500/20">
-              <ChatInterface
-                sessionId={sessionId}
-                onVaultDeployed={(data) => setVaultData(data)}
-                onMonitoringUpdate={(data) => setMonitoring(data)}
-              />
-            </div>
-
-            {/* Vault Card - Right Side */}
-            <div className="h-full flex flex-col overflow-hidden bg-gradient-to-br from-gray-950 via-purple-950/10 to-gray-950">
-              <div className="border-b border-purple-500/20 bg-gray-900/50 backdrop-blur-sm flex-shrink-0">
-                <div className="px-6 py-4">
-                  <h2 className="text-xl font-bold text-white">Your Vault</h2>
-                  <p className="text-sm text-purple-300">
-                    {monitoring?.active
-                      ? `Live Monitoring: ${monitoring.asset}`
-                      : "Chat with the Steward to get started"}
-                  </p>
+          <div className="h-full flex flex-col">
+            {/* Full-width ChatInterface with minimal info header */}
+            <div className="h-full flex flex-col overflow-hidden">
+              {/* Info Banner */}
+              <div className="flex-shrink-0 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 border-b border-cyan-500/20">
+                <div className="px-6 py-3 flex items-center justify-between max-w-4xl mx-auto">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">💬</span>
+                    <div>
+                      <p className="text-sm font-medium text-white">Share your story for custom DeFi yields</p>
+                      <p className="text-xs text-gray-400">Tell the Steward about your goals and risk tolerance</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30">
+                    <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                    <span className="text-xs text-green-400 font-medium">Live</span>
+                  </div>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto">
-                <VaultCard
-                  vaultData={vaultData}
-                  onHireSteward={vaultData ? handleHireSteward : undefined}
+              
+              {/* Chat Interface */}
+              <div className="flex-1 overflow-hidden">
+                <ChatInterface
+                  sessionId={sessionId}
+                  onVaultDeployed={(data) => setVaultData(data)}
+                  onMonitoringUpdate={(data) => setMonitoring(data)}
                 />
               </div>
             </div>
