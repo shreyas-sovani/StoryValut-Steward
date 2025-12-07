@@ -4,13 +4,18 @@
  * Executes the "Smart Invest" workflow when FRAX is deposited:
  * 1. Wrap native FRAX → wFRAX
  * 2. Split based on strategy (e.g., 60% stable / 40% volatile)
- * 3. Swap stable portion: wFRAX → frxUSD via Fraxswap
- * 4. Stake stable: frxUSD → sfrxUSD vault
- * 5. Swap volatile portion: wFRAX → frxETH via Fraxswap
- * 6. Stake volatile: frxETH → sfrxETH vault
+ * 3. Swap stable portion: wFRAX → frxUSD via Curve TriPool
+ * 4. Stake stable: frxUSD → sfrxUSD vault (MintRedeemer)
+ * 5. Swap volatile portion: wFRAX → frxETH via Curve TriPool
+ * 6. Stake volatile: frxETH → sfrxETH (Curve sfrxETH/frxETH pool)
  * 
  * Network: Fraxtal Mainnet (Chain ID: 252)
  * Native Gas: FRAX
+ * 
+ * Key Contracts:
+ * - Curve TriPool (frxUSD/frxETH/WFRAX): 0xa0D3911349e701A1F49C1Ba2dDA34b4ce9636569
+ * - Curve sfrxETH/frxETH pool: 0xF2f426Fe123De7b769b2D4F8c911512F065225d3
+ * - MintRedeemer sfrxUSD: 0xBFc4D34Db83553725eC6c768da71D2D9c1456B55
  */
 
 import dotenv from "dotenv";
@@ -88,6 +93,14 @@ import {
   swapFrxEthToSfrxEth,
   getSfrxEthBalance,
 } from "./curveFrxEthPool.js";
+
+// Import Curve TriPool helper for wFRAX → frxUSD swaps (more reliable than Fraxswap)
+import {
+  swapWFraxToFrxUsd,
+  swapWFraxToFrxEth,
+  TRIPOOL_ADDRESS,
+  TRIPOOL_COINS,
+} from "./curveTriPool.js";
 
 // Legacy config - kept for reference but no longer used
 const VOLATILE_SWAP_CONFIG = {
@@ -780,79 +793,34 @@ export async function executeInvestmentSequence(
     if (allocation.stableAmount > 0n) {
       addLog("\n💵 STABLE SIDE: wFRAX → frxUSD → sfrxUSD");
       
-      // STEP 2: Approve Router for wFRAX (stable portion)
-      addLog("🔐 STEP 2: Approving Fraxswap Router for wFRAX...");
-      broadcastLog(2, "Processing", `Approving Fraxswap Router for ${formatEther(allocation.stableAmount)} wFRAX...`);
+      // STEP 2: Swap wFRAX → frxUSD via Curve TriPool (more reliable than Fraxswap)
+      addLog(`💱 Swapping ${formatEther(allocation.stableAmount)} wFRAX → frxUSD via TriPool...`);
+      broadcastLog(2, "Processing", `Swapping ${formatEther(allocation.stableAmount)} wFRAX → frxUSD via TriPool...`);
 
-      const approveStableNonce = await getNextNonce();
-      const approveRouterStableTx = await walletClient.writeContract({
-        chain: fraxtal,
-        account: agentAccount,
-        address: CONTRACTS.wFRAX,
-        abi: ERC20_ABI,
-        functionName: "approve",
-        args: [CONTRACTS.fraxswapRouter, allocation.stableAmount],
-        nonce: approveStableNonce,
-      });
+      // Use Curve TriPool for wFRAX → frxUSD swap
+      // IMPORTANT: walletClient must have account attached (created with createWalletClient({ account: ... }))
+      const triPoolResult = await swapWFraxToFrxUsd(
+        walletClient,
+        publicClient as any, // Type coercion for viem version compatibility
+        agentAccount.address,
+        allocation.stableAmount,
+        50n, // 0.5% slippage
+        getNextNonce
+      );
 
-      const approveRouterStableReceipt = await waitForTx(approveRouterStableTx, "Approve Router (Stable)");
-      result.transactions.approveRouterStable = {
-        hash: approveRouterStableTx,
-        block: approveRouterStableReceipt.blockNumber.toString(),
-        explorer: `https://fraxscan.com/tx/${approveRouterStableTx}`,
-      };
-
-      // STEP 2 continued: Swap wFRAX → frxUSD on Fraxswap
-      addLog(`💱 Swapping ${formatEther(allocation.stableAmount)} wFRAX → frxUSD...`);
-      broadcastLog(2, "Processing", `Swapping ${formatEther(allocation.stableAmount)} wFRAX → frxUSD...`);
-
-      // Get expected output
-      let expectedFrxUSD: bigint;
-      try {
-        const amountsOut = await publicClient.readContract({
-          address: CONTRACTS.fraxswapRouter,
-          abi: FRAXSWAP_ROUTER_ABI,
-          functionName: "getAmountsOut",
-          args: [allocation.stableAmount, [CONTRACTS.wFRAX, CONTRACTS.frxUSD]],
-        }) as bigint[];
-        expectedFrxUSD = amountsOut[1];
-        addLog(`   Expected output: ${formatEther(expectedFrxUSD)} frxUSD`);
-      } catch {
-        // If quote fails, use 0 as minimum (accept any amount)
-        expectedFrxUSD = 0n;
-        addLog(`   ⚠️ Could not get quote, using 0 slippage protection`);
+      if (!triPoolResult.success || !triPoolResult.txHash) {
+        throw new Error(`TriPool wFRAX→frxUSD swap failed: ${triPoolResult.error || "Unknown error"}`);
       }
 
-      // Apply 1% slippage tolerance
-      const minFrxUSD = (expectedFrxUSD * 99n) / 100n;
-
-      const swapStableNonce = await getNextNonce();
-      const swapStableTx = await walletClient.writeContract({
-        chain: fraxtal,
-        account: agentAccount,
-        address: CONTRACTS.fraxswapRouter,
-        abi: FRAXSWAP_ROUTER_ABI,
-        functionName: "swapExactTokensForTokens",
-        args: [
-          allocation.stableAmount,
-          minFrxUSD,
-          [CONTRACTS.wFRAX, CONTRACTS.frxUSD],
-          agentAccount.address,
-          getDeadline(),
-        ],
-        nonce: swapStableNonce,
-      });
-
-      const swapStableReceipt = await waitForTx(swapStableTx, "Swap wFRAX → frxUSD");
       const frxUSDReceived = await getTokenBalance(CONTRACTS.frxUSD, agentAccount.address);
       result.transactions.swapToFrxUSD = {
-        hash: swapStableTx,
-        block: swapStableReceipt.blockNumber.toString(),
-        explorer: `https://fraxscan.com/tx/${swapStableTx}`,
+        hash: triPoolResult.txHash,
+        block: "confirmed",
+        explorer: `https://fraxscan.com/tx/${triPoolResult.txHash}`,
         amountOut: formatEther(frxUSDReceived),
       };
       addLog(`✅ Swapped to ${formatEther(frxUSDReceived)} frxUSD`);
-      broadcastLog(2, "Success", `Swapped to ${formatEther(frxUSDReceived)} frxUSD`, swapStableTx, formatEther(frxUSDReceived));
+      broadcastLog(2, "Success", `Swapped to ${formatEther(frxUSDReceived)} frxUSD`, triPoolResult.txHash, formatEther(frxUSDReceived));
 
       // STEP 3: Approve frxUSD for FraxtalERC4626MintRedeemer (Stake/Unstake contract)
       // On Fraxtal, sfrxUSD requires using the MintRedeemer contract, not direct deposit
@@ -909,77 +877,34 @@ export async function executeInvestmentSequence(
     if (allocation.volatileAmount > 0n) {
       addLog("\n📈 VOLATILE SIDE: wFRAX → frxETH → sfrxETH");
       
-      // STEP 4: Approve Router for wFRAX (volatile portion) and swap
-      addLog("🔐 STEP 4: Approving Fraxswap Router for wFRAX...");
-      broadcastLog(4, "Processing", `Swapping ${formatEther(allocation.volatileAmount)} wFRAX → frxETH...`);
+      // STEP 4: Swap wFRAX → frxETH via Curve TriPool
+      addLog(`� Swapping ${formatEther(allocation.volatileAmount)} wFRAX → frxETH via TriPool...`);
+      broadcastLog(4, "Processing", `Swapping ${formatEther(allocation.volatileAmount)} wFRAX → frxETH via TriPool...`);
 
-      const approveVolatileNonce = await getNextNonce();
-      const approveRouterVolatileTx = await walletClient.writeContract({
-        chain: fraxtal,
-        account: agentAccount,
-        address: CONTRACTS.wFRAX,
-        abi: ERC20_ABI,
-        functionName: "approve",
-        args: [CONTRACTS.fraxswapRouter, allocation.volatileAmount],
-        nonce: approveVolatileNonce,
-      });
+      // Use Curve TriPool for wFRAX → frxETH swap
+      // IMPORTANT: walletClient must have account attached (created with createWalletClient({ account: ... }))
+      const triPoolVolatileResult = await swapWFraxToFrxEth(
+        walletClient,
+        publicClient as any, // Type coercion for viem version compatibility
+        agentAccount.address,
+        allocation.volatileAmount,
+        50n, // 0.5% slippage
+        getNextNonce
+      );
 
-      const approveRouterVolatileReceipt = await waitForTx(approveRouterVolatileTx, "Approve Router (Volatile)");
-      result.transactions.approveRouterVolatile = {
-        hash: approveRouterVolatileTx,
-        block: approveRouterVolatileReceipt.blockNumber.toString(),
-        explorer: `https://fraxscan.com/tx/${approveRouterVolatileTx}`,
-      };
-
-      // STEP 4 continued: Swap wFRAX → frxETH on Fraxswap
-      addLog(`💱 Swapping ${formatEther(allocation.volatileAmount)} wFRAX → frxETH...`);
-
-      // Get expected output
-      let expectedFrxETH: bigint;
-      try {
-        const amountsOut = await publicClient.readContract({
-          address: CONTRACTS.fraxswapRouter,
-          abi: FRAXSWAP_ROUTER_ABI,
-          functionName: "getAmountsOut",
-          args: [allocation.volatileAmount, [CONTRACTS.wFRAX, CONTRACTS.frxETH]],
-        }) as bigint[];
-        expectedFrxETH = amountsOut[1];
-        addLog(`   Expected output: ${formatEther(expectedFrxETH)} frxETH`);
-      } catch {
-        expectedFrxETH = 0n;
-        addLog(`   ⚠️ Could not get quote, using 0 slippage protection`);
+      if (!triPoolVolatileResult.success || !triPoolVolatileResult.txHash) {
+        throw new Error(`TriPool wFRAX→frxETH swap failed: ${triPoolVolatileResult.error || "Unknown error"}`);
       }
 
-      // Apply 1% slippage tolerance
-      const minFrxETH = (expectedFrxETH * 99n) / 100n;
-
-      const swapVolatileNonce = await getNextNonce();
-      const swapVolatileTx = await walletClient.writeContract({
-        chain: fraxtal,
-        account: agentAccount,
-        address: CONTRACTS.fraxswapRouter,
-        abi: FRAXSWAP_ROUTER_ABI,
-        functionName: "swapExactTokensForTokens",
-        args: [
-          allocation.volatileAmount,
-          minFrxETH,
-          [CONTRACTS.wFRAX, CONTRACTS.frxETH],
-          agentAccount.address,
-          getDeadline(),
-        ],
-        nonce: swapVolatileNonce,
-      });
-
-      const swapVolatileReceipt = await waitForTx(swapVolatileTx, "Swap wFRAX → frxETH");
       const frxETHReceived = await getTokenBalance(CONTRACTS.frxETH, agentAccount.address);
       result.transactions.swapToFrxETH = {
-        hash: swapVolatileTx,
-        block: swapVolatileReceipt.blockNumber.toString(),
-        explorer: `https://fraxscan.com/tx/${swapVolatileTx}`,
+        hash: triPoolVolatileResult.txHash,
+        block: "confirmed",
+        explorer: `https://fraxscan.com/tx/${triPoolVolatileResult.txHash}`,
         amountOut: formatEther(frxETHReceived),
       };
       addLog(`✅ Swapped to ${formatEther(frxETHReceived)} frxETH`);
-      broadcastLog(4, "Success", `Swapped to ${formatEther(frxETHReceived)} frxETH`, swapVolatileTx, formatEther(frxETHReceived));
+      broadcastLog(4, "Success", `Swapped to ${formatEther(frxETHReceived)} frxETH`, triPoolVolatileResult.txHash, formatEther(frxETHReceived));
 
       // ======================================================================
       // STEP 5: Swap frxETH → sfrxETH via Curve stable-ng Pool

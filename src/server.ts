@@ -17,6 +17,10 @@ import {
   setSmartInvestBroadcaster,
   strategyManager,
 } from "./tools/smartInvestTools.js";
+import {
+  executeRebalanceSequence,
+  setRebalanceBroadcaster,
+} from "./tools/rebalanceTools.js";
 import { parseEther, formatEther } from "viem";
 import dotenv from "dotenv";
 
@@ -96,6 +100,9 @@ setSSEBroadcaster(broadcastFundingUpdate);
 
 // Register the SSE broadcaster with smartInvestTools (for Smart Invest workflow)
 setSmartInvestBroadcaster(broadcastFundingUpdate);
+
+// Register the SSE broadcaster with rebalanceTools (for Rebalance workflow)
+setRebalanceBroadcaster(broadcastFundingUpdate);
 
 // CORS configuration for frontend
 // Allow localhost (development) and Vercel (production)
@@ -438,6 +445,92 @@ app.post("/api/simulate/recovery", (c) => {
     message: "Market recovered - Watcher monitoring normally",
     timestamp: new Date().toISOString(),
   });
+});
+
+// ============================================================================
+// HYBRID REBALANCER ENDPOINT - ADK-TS Agent + Transaction Execution
+// ============================================================================
+
+// POST /api/rebalance - Trigger market crash simulation and rebalance
+app.post("/api/rebalance", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { mockVol = 0.20 } = body;
+
+    console.log("\n🔄 ====== REBALANCE REQUEST ======");
+    console.log(`📊 Mock Volatility: ${(mockVol * 100).toFixed(1)}%`);
+
+    // Get or create agent session for reasoning
+    const { runner } = await getOrCreateSession("rebalance-session");
+
+    // Step 1: Agent reasoning about the market crash
+    const crashPrompt = `🚨 MARKET CRASH SIMULATION TRIGGERED!
+
+Current Conditions:
+- ETH Volatility: ${(mockVol * 100).toFixed(1)}% (threshold: 15%)
+- sfrxETH APY: Dropping from 6.5% to ~4.0%
+- sfrxUSD APY: Stable at 4.1% (Treasury-backed)
+
+Analyze this situation and decide if we should rebalance.
+If volatility > 15%, call the execute_rebalance tool with mockVol=${mockVol} to shift 60% of sfrxETH to sfrxUSD.
+
+Explain your reasoning briefly before taking action.`;
+
+    // Broadcast agent thinking
+    broadcastFundingUpdate({
+      type: "rebalance_update",
+      status: "Processing",
+      message: "🤖 AI Agent analyzing market conditions...",
+      timestamp: new Date().toISOString(),
+    });
+
+    // Let the agent reason and potentially call the rebalance tool
+    let agentResponse: string;
+    try {
+      agentResponse = await runner.ask(crashPrompt);
+    } catch (agentError) {
+      console.error("Agent reasoning error:", agentError);
+      // If agent fails, execute directly
+      agentResponse = "Agent reasoning failed, executing rebalance directly.";
+    }
+
+    console.log("🤖 Agent Response:", agentResponse);
+
+    // Broadcast agent's reasoning
+    broadcastFundingUpdate({
+      type: "rebalance_update",
+      status: "Processing",
+      message: agentResponse.slice(0, 200) + (agentResponse.length > 200 ? "..." : ""),
+      timestamp: new Date().toISOString(),
+    });
+
+    // Step 2: Execute the rebalance sequence (the agent may have already called this via tool)
+    // We also call it directly to ensure execution
+    const rebalanceResult = await executeRebalanceSequence(mockVol);
+
+    // Update current yield to reflect crash conditions
+    if (rebalanceResult.status === "SUCCESS" || rebalanceResult.status === "SKIPPED") {
+      current_yield = 4.0; // Simulated crashed yield
+      addWatcherLog("warning", `📉 Market crash simulated - Yield at ${current_yield}%`);
+    }
+
+    return c.json({
+      success: rebalanceResult.status === "SUCCESS" || rebalanceResult.status === "SKIPPED",
+      agentReasoning: agentResponse,
+      rebalanceResult,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Rebalance error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Failed to execute rebalance",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      500
+    );
+  }
 });
 
 // GET /api/watcher/status - Get current watcher state

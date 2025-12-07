@@ -37,7 +37,7 @@
 │  │  - Deposit Detection → Auto-Investment → SSE Broadcasting         │ │
 │  └───────────────────────────────────────────────────────────────────┘ │
 │  ┌───────────────────────────────────────────────────────────────────┐ │
-│  │  Tools: fraxTools, executionTools, smartInvestTools, etc.         │ │
+│  │  Tools: fraxTools, executionTools, smartInvestTools, curveTriPool │ │
 │  └───────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
@@ -45,13 +45,14 @@
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    FRAXTAL BLOCKCHAIN (Chain ID: 252)                   │
 │  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────────────┐│
-│  │   wFRAX    │  │   frxUSD   │  │  sfrxUSD   │  │  Fraxswap V2       ││
-│  │ 0xfc...02  │  │ 0xfc...01  │  │ 0xfc...08  │  │  Router            ││
-│  └────────────┘  └────────────┘  └────────────┘  │  0x7ae2...          ││
+│  │   wFRAX    │  │   frxUSD   │  │  sfrxUSD   │  │ Curve TriPool      ││
+│  │ 0xfc...02  │  │ 0xfc...01  │  │ 0xfc...08  │  │ 0xa0D3...6569      ││
+│  └────────────┘  └────────────┘  └────────────┘  │ frxUSD/frxETH/wFRAX││
 │  ┌────────────┐  ┌────────────┐  ┌────────────┐  └────────────────────┘│
-│  │  frxETH    │  │  sfrxETH   │  │MintRedeemer│                        │
-│  │ 0xfc...06  │  │ 0xfc...05  │  │ 0xBFc4...  │                        │
-│  └────────────┘  └────────────┘  └────────────┘                        │
+│  │  frxETH    │  │  sfrxETH   │  │MintRedeemer│  ┌────────────────────┐│
+│  │ 0xfc...06  │  │ 0xfc...05  │  │ 0xBFc4...  │  │Curve frxETH/sfrxETH││
+│  └────────────┘  └────────────┘  └────────────┘  │ 0xF2f4...25d3      ││
+│                                                  └────────────────────┘│
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -106,28 +107,28 @@ User deposits FRAX to agent wallet
 │  ├─ wFRAX.deposit{ value: investableAmount }()                       │
 │  └─ SSE: broadcastLog(1, "Processing", "Wrapping FRAX...")           │
 │                                                                      │
-│  STEP 2: SWAP TO frxUSD (Stable Leg)                                 │
-│  ├─ wFRAX.approve(router, stableAmount)                              │
-│  ├─ router.swapExactTokensForTokens([wFRAX, frxUSD])                 │
-│  └─ SSE: broadcastLog(2, "Success", "Swapped to frxUSD")             │
+│  STEP 2: SWAP TO frxUSD (Stable Leg) - Curve TriPool                 │
+│  ├─ wFRAX.approve(curveTriPool, stableAmount)                        │
+│  ├─ curveTriPool.exchange(2, 0, amount, minDy) [wFRAX→frxUSD]        │
+│  └─ SSE: broadcastLog(2, "Success", "Swapped to frxUSD via TriPool") │
 │                                                                      │
 │  STEP 3: STAKE sfrxUSD                                               │
 │  ├─ frxUSD.approve(MintRedeemer, amount)                             │
 │  ├─ MintRedeemer.deposit(amount, receiver)                           │
 │  └─ SSE: broadcastLog(3, "Success", "Staked in sfrxUSD vault")       │
 │                                                                      │
-│  STEP 4: SWAP TO frxETH (Volatile Leg)                               │
-│  ├─ wFRAX.approve(router, volatileAmount)                            │
-│  ├─ router.swapExactTokensForTokens([wFRAX, frxETH])                 │
-│  └─ SSE: broadcastLog(4, "Success", "Swapped to frxETH")             │
+│  STEP 4: SWAP TO frxETH (Volatile Leg) - Curve TriPool               │
+│  ├─ wFRAX.approve(curveTriPool, volatileAmount)                      │
+│  ├─ curveTriPool.exchange(2, 1, amount, minDy) [wFRAX→frxETH]        │
+│  └─ SSE: broadcastLog(4, "Success", "Swapped to frxETH via TriPool") │
 │                                                                      │
-│  STEP 5: SWAP frxETH → sfrxETH (Curve Pool)                          │
+│  STEP 5: SWAP frxETH → sfrxETH (Curve stable-ng Pool)                │
 │  ├─ Resolve pool indices via coins(i) function                       │
 │  ├─ Quote expected output via get_dy(i, j, dx)                       │
 │  ├─ frxETH.approve(curvePool, amount)                                │
 │  ├─ curvePool.exchange(i, j, dx, minDy, receiver)                    │
 │  │   ✅ Curve stable-ng pool: 0xF2f426Fe123De7b769b2D4F8c911512F065225d3
-│  │   ✅ Better depth & pricing than Fraxswap for frxETH↔sfrxETH      │
+│  │   ✅ Better depth & pricing for frxETH↔sfrxETH                    │
 │  └─ SSE: broadcastLog(5, "Success", "Swapped via Curve pool")        │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -197,71 +198,66 @@ User deposits FRAX to agent wallet
 | sfrxUSD | `0xfc00...0008` | Staked frxUSD vault (~4.1% APY) |
 | frxETH | `0xfc00...0006` | Liquid staking token |
 | sfrxETH | `0xfc00...0005` | Staked frxETH (~6-7% APY) |
-| Fraxswap Router | `0x7ae2...` | DEX for wFRAX→frxUSD, wFRAX→frxETH swaps |
 | MintRedeemer | `0xBFc4...` | frxUSD → sfrxUSD staking |
-| **Curve frxETH/sfrxETH** | `0xF2f4...25d3` | **frxETH → sfrxETH swap (stable-ng pool)** |
+| **Curve TriPool** | `0xa0D3...6569` | **wFRAX↔frxUSD↔frxETH swaps (primary DEX)** |
+| **Curve frxETH/sfrxETH** | `0xF2f4...25d3` | **frxETH ↔ sfrxETH swap (stable-ng pool)** |
+| ~~Fraxswap Router~~ | `0x7ae2...` | ~~Deprecated - TWAMM errors~~ |
 
 ---
 
-## � Curve Pool Integration (Volatile Leg)
+## 🔄 Curve Pool Integration (All Swaps)
 
 ### Why Curve Instead of Fraxswap?
-On Fraxtal L2, sfrxETH is a **bridged yield token**. The `deposit()` function on sfrxETH reverts on L2 (only works on Ethereum mainnet). We use the **Curve stable-ng pool** for better liquidity depth and pricing.
 
-### Pool Details
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Curve frxETH/sfrxETH Pool (Fraxtal)                                    │
-│  ├─ Address: 0xF2f426Fe123De7b769b2D4F8c911512F065225d3                 │
-│  ├─ Type: stable-ng (optimized for pegged assets)                       │
-│  ├─ UI: curve.fi/dex/fraxtal/pools/factory-stable-ng-6                  │
-│  └─ Liquidity: ~$3k per side (sufficient for micro-investments)         │
-│                                                                         │
-│  Coin Layout (resolved dynamically):                                    │
-│  ├─ coins(0) = frxETH  (0xfc00000000000000000000000000000000000006)     │
-│  └─ coins(1) = sfrxETH (0xfc00000000000000000000000000000000000005)     │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+Fraxswap V2 Router on Fraxtal L2 returns `TWAMM_OUT_OF_DATE` errors because:
+1. TWAMM (Time-Weighted Average Market Maker) requires periodic oracle updates
+2. Low liquidity pools may have stale TWAMM state
+3. Direct swaps via `swapExactTokensForTokens` fail unexpectedly
 
-### curveFrxEthPool.ts Helper Module
-```typescript
-// Key exports:
-getIndices(publicClient)        // Resolve coin indices from pool
-quoteDy(publicClient, dx)       // Get expected output via get_dy()
-calculateMinDy(expectedDy, bps) // Apply slippage protection
-ensureAllowance(...)            // Check/set approval for Curve pool
-swapFrxEthToSfrxEth(...)        // Execute exchange(i, j, dx, minDy, receiver)
+**Solution**: Use **Curve pools** for all token swaps:
+- **Curve TriPool** (`0xa0D3911349e701A1F49C1Ba2dDA34b4ce9636569`) for wFRAX↔frxUSD↔frxETH
+- **Curve frxETH/sfrxETH** (`0xF2f426Fe123De7b769b2D4F8c911512F065225d3`) for frxETH↔sfrxETH
 
-// Configuration:
-CURVE_VOLATILE_SWAP_CONFIG = {
-  slippageBps: 50n,              // 0.5% slippage tolerance
-  minSwapAmountWei: 10^13,       // 0.00001 ETH minimum
-  pool: "0xF2f426Fe123De7b769b2D4F8c911512F065225d3"
-}
-```
+### Pool 1: Curve TriPool (frxUSD/frxETH/wFRAX)
+- **Address**: `0xa0D3911349e701A1F49C1Ba2dDA34b4ce9636569`
+- **Type**: Plain pool (3 assets)
+- **Purpose**: Primary DEX for investment & rebalancing
+- **Coin Layout**: coins(0)=frxUSD, coins(1)=frxETH, coins(2)=wFRAX
+- **Supported Swaps**:
+  - wFRAX → frxUSD: `exchange(2, 0, amount, minDy)` [Stable leg]
+  - wFRAX → frxETH: `exchange(2, 1, amount, minDy)` [Volatile leg]
+  - frxETH → wFRAX: `exchange(1, 2, amount, minDy)` [Rebalance]
 
-### Swap Flow
-```
-frxETH (from Step 4)
-       │
-       ↓ getIndices() - resolve i=0 (frxETH), j=1 (sfrxETH)
-       ↓ quoteDy(i, j, dx) - get expected sfrxETH output
-       ↓ calculateMinDy() - apply 0.5% slippage
-       ↓ ensureAllowance() - approve Curve pool if needed
-       ↓ exchange(i, j, dx, minDy, receiver) - execute swap
-       │
-       ↓
-sfrxETH (earning ~6-7% APY)
-```
+### Pool 2: Curve frxETH/sfrxETH (Stable-NG)
+- **Address**: `0xF2f426Fe123De7b769b2D4F8c911512F065225d3`
+- **Type**: stable-ng (optimized for pegged assets)
+- **Purpose**: frxETH↔sfrxETH swaps (yield token conversion)
+- **Coin Layout**: coins(0)=frxETH, coins(1)=sfrxETH
+- **Supported Swaps**:
+  - frxETH → sfrxETH: `exchange(0, 1, amount, minDy)` [Investment]
+  - sfrxETH → frxETH: `exchange(1, 0, amount, minDy)` [Rebalance]
 
-### Edge Case Handling
-- **Amount too small**: Skip swap, keep frxETH as volatile exposure
-- **Pool returns 0**: Skip swap, log warning, partial success
-- **Swap reverts**: Catch error, keep frxETH, mark as PARTIAL_SUCCESS
+### Helper Modules
+
+**curveTriPool.ts** - TriPool swap helpers:
+- `swapWFraxToFrxUsd()` - Direct wFRAX→frxUSD (stable leg)
+- `swapWFraxToFrxEth()` - Direct wFRAX→frxETH (volatile leg)
+- `swapFrxEthToFrxUsd()` - 2-step frxETH→wFRAX→frxUSD (rebalance)
+
+**curveFrxEthPool.ts** - frxETH/sfrxETH swap helpers:
+- `swapFrxEthToSfrxEth()` - frxETH→sfrxETH (investment)
+- `swapSfrxEthToFrxEth()` - sfrxETH→frxETH (rebalance)
+
+### Key Benefits
+
+1. **Bypasses TWAMM errors** - No stale oracle issues
+2. **Better liquidity** - Curve pools have deeper liquidity
+3. **Consistent routing** - All swaps through Curve pools
+4. **Simpler flow** - Standard `exchange(i, j, dx, min_dy)` interface
 
 ---
 
-## �📡 API Endpoints
+## 📡 API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -277,7 +273,8 @@ sfrxETH (earning ~6-7% APY)
 | GET | `/api/wallet/:address/balances` | Get token balances |
 | GET | `/api/market/data` | Get ETH price, gas, sentiment |
 | POST | `/api/withdraw` | Withdraw all funds to recipient address |
-| POST | `/api/simulate/crash` | Demo: Simulate market crash |
+| **POST** | **`/api/rebalance`** | **AI-powered crash rebalancing (sfrxETH→sfrxUSD)** |
+| POST | `/api/simulate/crash` | Demo: Simulate market crash (legacy) |
 | POST | `/api/simulate/recovery` | Demo: Simulate recovery |
 
 ---
@@ -369,6 +366,114 @@ const FIXED_GAS_RESERVE = 10000000000000000n; // 0.01 FRAX
 2. **Sequential Execution**: Tokens transferred one-by-one with confirmed receipts to prevent nonce collisions
 3. **Address Validation**: Frontend validates recipient address format before API call
 4. **Graceful Error Handling**: Individual token failures don't block other transfers
+
+---
+
+## 🚨 Market Crash Simulation (AI-Powered Rebalancing)
+
+### Overview
+The **Simulate Market Crash** feature demonstrates the agent's ability to autonomously rebalance portfolios during volatile market conditions. When triggered, the ADK-TS agent analyzes the portfolio, reasons about the optimal rebalancing strategy, and executes a 4-step transaction sequence to shift volatile holdings (sfrxETH) into stable positions (sfrxUSD).
+
+### Architecture
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  InvestmentDashboard (Frontend)                                         │
+│  ┌─────────────────────────────────────────────────────────────────────┐│
+│  │  "Simulate Market Crash" Button (AlertTriangle Icon)                ││
+│  │  ├─ Opens minimal terminal-style modal                              ││
+│  │  ├─ Shows live execution logs as transactions happen                ││
+│  │  ├─ Displays agent reasoning from ADK-TS                            ││
+│  │  └─ Manual close only (no auto-close)                               ││
+│  └─────────────────────────────────────────────────────────────────────┘│
+│         │                                                               │
+│         ↓ POST /api/rebalance { strategy: "crash", agentWallet }        │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│  rebalanceForCrash() - rebalanceTools.ts                                │
+│                                                                         │
+│  ADK-TS Agent Reasoning (Gemini 2.0 Flash):                             │
+│  ├─ Analyzes current portfolio allocation                               │
+│  ├─ Identifies volatile exposure (sfrxETH)                              │
+│  ├─ Calculates optimal rebalance percentage                             │
+│  └─ Provides natural language reasoning for each decision               │
+│                                                                         │
+│  4-Step Rebalancing Pipeline:                                           │
+│                                                                         │
+│  STEP 1: sfrxETH → frxETH (Curve stable-ng Pool)                        │
+│  ├─ Pool: 0xF2f426Fe123De7b769b2D4F8c911512F065225d3                    │
+│  ├─ Coin Layout: coins(0)=frxETH, coins(1)=sfrxETH                      │
+│  ├─ Uses exchange(1, 0, amount, minDy) for sfrxETH→frxETH               │
+│  └─ 0.5% slippage protection                                            │
+│                                                                         │
+│  STEP 2: frxETH → wFRAX (Curve TriPool)                                 │
+│  ├─ Pool: 0xa0D3911349e701A1F49C1Ba2dDA34b4ce9636569                    │
+│  ├─ Coin Layout: coins(0)=frxUSD, coins(1)=frxETH, coins(2)=wFRAX       │
+│  ├─ Uses exchange(1, 2, amount, minDy) for frxETH→wFRAX                 │
+│  └─ Better liquidity than Fraxswap (avoids TWAMM errors)                │
+│                                                                         │
+│  STEP 3: wFRAX → frxUSD (Curve TriPool)                                 │
+│  ├─ Same pool: 0xa0D3911349e701A1F49C1Ba2dDA34b4ce9636569               │
+│  ├─ Uses exchange(2, 0, amount, minDy) for wFRAX→frxUSD                 │
+│  └─ Intermediate step required (no direct frxETH→frxUSD path)           │
+│                                                                         │
+│  STEP 4: frxUSD → sfrxUSD (MintRedeemer Vault)                          │
+│  ├─ Contract: 0xBFc4D34Db83553725eC6c768da71D2D9c1456B55                │
+│  ├─ deposit(amount, receiver) - vault staking                           │
+│  └─ Now earning stable ~4.1% APY instead of volatile ETH exposure       │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Frontend Response Handling                                             │
+│  ├─ Terminal-style live logs (auto-scrolling)                           │
+│  ├─ Agent reasoning always visible                                      │
+│  ├─ Transaction status cards with explorer links                        │
+│  ├─ Before/After balance comparison                                     │
+│  └─ User must manually close modal to review results                    │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Why Curve TriPool Instead of Fraxswap?
+
+The Fraxswap V2 Router on Fraxtal L2 frequently returns `TWAMM_OUT_OF_DATE` errors. The **Curve TriPool** provides:
+- Consistent liquidity for frxUSD/frxETH/wFRAX
+- Standard `exchange(i, j, dx, min_dy)` without TWAMM complexity
+- Multi-hop routing through the triangle
+
+### Rebalancing Flow
+
+```
+sfrxETH (Volatile, ~6% APY)
+    ↓ Step 1: Curve frxETH/sfrxETH Pool → exchange(1, 0)
+frxETH
+    ↓ Step 2: Curve TriPool → exchange(1, 2)
+wFRAX
+    ↓ Step 3: Curve TriPool → exchange(2, 0)
+frxUSD
+    ↓ Step 4: MintRedeemer → deposit()
+sfrxUSD (Stable, ~4.1% APY)
+```
+
+### Security Considerations
+
+1. **Slippage Protection**: 1% max slippage on all Curve swaps
+2. **Balance Validation**: Checks sfrxETH balance before attempting rebalance
+3. **Transaction Receipts**: Waits for confirmation on each step
+4. **Graceful Degradation**: Returns SKIPPED if no volatile holdings
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `src/tools/rebalanceTools.ts` | New tool with 4-step rebalance pipeline |
+| `src/tools/curveTriPool.ts` | **NEW** - TriPool swap helpers |
+| `src/tools/curveFrxEthPool.ts` | Added sfrxETH→frxETH swap direction |
+| `src/tools/smartInvestTools.ts` | Updated to use TriPool for wFRAX swaps |
+| `src/agent.ts` | Registered rebalance tool |
+| `src/server.ts` | Added `/api/rebalance` endpoint |
+| `frontend/components/InvestmentDashboard.tsx` | Crash modal UI |
 
 ---
 
@@ -497,13 +602,15 @@ AgentBuilder.create("StorySteward")
 
 1. **Autonomous Execution**: Agent detects deposits and invests without human intervention
 2. **Real-Time UI**: SSE streaming provides live transaction updates to frontend
-3. **Curve Pool Integration**: Uses Curve stable-ng pool for frxETH→sfrxETH (better depth than Fraxswap)
-4. **Robust Nonce Management**: Dual block tag check + retry logic prevents transaction failures
-5. **Story-Based Allocation**: AI analyzes natural language for personalized strategy
-6. **5-Step DeFi Pipeline**: Wrap → Swap(Stable) → Stake → Swap(Volatile) → Curve Swap
-7. **Production-Safe**: Multi-layer security with gas reserves and execution flags
-8. **Withdraw All Funds**: Complete exit strategy with sequential token transfers
-9. **Session Management**: Multiple users can interact simultaneously
+3. **Curve TriPool Integration**: All wFRAX↔frxUSD↔frxETH swaps via TriPool (bypasses Fraxswap TWAMM errors)
+4. **Curve frxETH/sfrxETH Pool**: frxETH↔sfrxETH swaps via stable-ng pool
+5. **Robust Nonce Management**: Dual block tag check + retry logic prevents transaction failures
+6. **Story-Based Allocation**: AI analyzes natural language for personalized strategy
+7. **5-Step Investment Pipeline**: Wrap → Swap(Stable via TriPool) → Stake → Swap(Volatile via TriPool) → Curve Swap
+8. **4-Step Crash Rebalancing**: sfrxETH → frxETH → wFRAX → frxUSD → sfrxUSD (AI-reasoned)
+9. **Production-Safe**: Multi-layer security with gas reserves and execution flags
+10. **Withdraw All Funds**: Complete exit strategy with sequential token transfers
+11. **Session Management**: Multiple users can interact simultaneously
 
 ---
 
@@ -519,7 +626,9 @@ storyvault-steward/
 │       ├── fraxTools.ts      # Yield data fetching
 │       ├── executionTools.ts # Withdraw all funds + legacy micro-investment
 │       ├── smartInvestTools.ts # 5-step Smart Invest sequence
-│       ├── curveFrxEthPool.ts  # Curve pool helper (frxETH→sfrxETH)
+│       ├── curveFrxEthPool.ts  # Curve pool helper (frxETH↔sfrxETH)
+│       ├── curveTriPool.ts     # **NEW** Curve TriPool helper (frxUSD/frxETH/wFRAX)
+│       ├── rebalanceTools.ts   # **NEW** Market crash rebalancing (4-step pipeline)
 │       ├── strategyManager.ts  # User strategy preferences
 │       ├── walletTool.ts     # Balance checking
 │       └── fraxlendTools.ts  # Leverage calculations

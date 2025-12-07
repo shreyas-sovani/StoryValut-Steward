@@ -149,3 +149,55 @@ export async function checkHealth(): Promise<{
 
   return response.json();
 }
+
+/**
+ * Rebalance result from backend
+ */
+export interface RebalanceResult {
+  status: "SUCCESS" | "PARTIAL_SUCCESS" | "FAILED" | "DEMO_MODE" | "SKIPPED";
+  mockVolatility: number;
+  mockApyBefore: { sfrxETH: number; sfrxUSD: number };
+  mockApyAfter: { sfrxETH: number; sfrxUSD: number };
+  agentReasoning: string;
+  rebalanceAmount: string;
+  rebalancePercent: number;
+  transactions: {
+    swapSfrxETHToFrxETH?: { hash: string; block: string; explorer: string };
+    swapFrxETHToWFRAX?: { hash: string; block: string; explorer: string };
+    swapWFRAXToFrxUSD?: { hash: string; block: string; explorer: string };
+    stakeFrxUSDToSfrxUSD?: { hash: string; block: string; explorer: string };
+  };
+  balancesBefore: { sfrxETH: string; sfrxUSD: string };
+  balancesAfter: { sfrxETH: string; sfrxUSD: string };
+  error?: string;
+  logs: string[];
+}
+
+export interface RebalanceResponse {
+  success: boolean;
+  agentReasoning: string;
+  rebalanceResult: RebalanceResult;
+  timestamp: string;
+  error?: string;
+}
+
+/**
+ * Trigger a market crash simulation and rebalance
+ * @param mockVol - Mock volatility (0.20 = 20%, triggers rebalance if > 0.15)
+ */
+export async function triggerRebalance(mockVol: number = 0.20): Promise<RebalanceResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/rebalance`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ mockVol }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
