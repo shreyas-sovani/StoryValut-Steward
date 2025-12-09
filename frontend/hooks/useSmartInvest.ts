@@ -2,7 +2,15 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+// ============================================================================
+// RAILWAY BACKEND URL
+// ============================================================================
+// Backend runs ONLY on Railway (persistent Node.js server, NOT Vercel serverless)
+const API_BASE_URL = 
+  process.env.NEXT_PUBLIC_API_URL || 
+  (process.env.NODE_ENV === "production" 
+    ? "https://storyvalut-steward-production.up.railway.app" 
+    : "http://localhost:3001");
 
 // ============================================================================
 // TYPES

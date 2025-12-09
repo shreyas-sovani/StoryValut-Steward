@@ -28,7 +28,19 @@ dotenv.config();
 
 /**
  * StoryVault Steward API Server
- * Exposes the agent as a REST API with SSE streaming for real-time responses
+ * 
+ * ⚠️  RAILWAY-ONLY DEPLOYMENT - NOT FOR VERCEL ⚠️
+ * 
+ * This backend runs ONLY on Railway as a persistent Node.js server.
+ * It is NOT deployed to Vercel serverless/edge functions.
+ * 
+ * The frontend (on Vercel) calls this Railway server directly at:
+ *   https://storyvalut-steward-production.up.railway.app
+ * 
+ * This server requires persistent state for:
+ * - Autonomous watcher loop (deposit detection)
+ * - SSE streaming (real-time updates)
+ * - In-memory sessions and rate limiting
  */
 
 const app = new Hono();
@@ -1173,16 +1185,22 @@ serve({
 });
 
 // ============================================================================
-// VERCEL SERVERLESS EXPORTS
+// RAILWAY-ONLY DEPLOYMENT
 // ============================================================================
-// Export handlers for Vercel Edge/Serverless deployment
-// These allow Vercel to handle the Hono app as serverless functions
+// This backend is NOT deployed to Vercel.
+// It runs ONLY on Railway as a persistent Node.js server.
+// 
+// The frontend (deployed on Vercel) must call Railway API endpoints directly:
+//   https://storyvalut-steward-production.up.railway.app/api/chat
+//
+// Features that require persistent server (NOT compatible with serverless):
+// - Autonomous watcher loop (setInterval every 5 seconds)
+// - SSE streaming connections (long-lived connections)
+// - In-memory session storage (sessions Map)
+// - Rate limiting state (rateLimitMap)
+//
+// DO NOT add Vercel serverless exports here. They would cause:
+// - Watcher loop to restart on every request
+// - SSE connections to timeout
+// - Session state to be lost between requests
 // ============================================================================
-
-export default app;
-export const GET = app.fetch;
-export const POST = app.fetch;
-export const PUT = app.fetch;
-export const DELETE = app.fetch;
-export const PATCH = app.fetch;
-export const OPTIONS = app.fetch;

@@ -5,6 +5,13 @@ import { Flame, Wallet, Activity, AlertTriangle, CheckCircle, Info, Copy, QrCode
 import { cn } from "@/lib/utils";
 import { sendChatMessage, type ChatMessage } from "@/lib/api";
 
+// Railway backend URL (NOT Vercel serverless)
+const API_BASE_URL = 
+  process.env.NEXT_PUBLIC_API_URL || 
+  (process.env.NODE_ENV === "production" 
+    ? "https://storyvalut-steward-production.up.railway.app" 
+    : "http://localhost:3001");
+
 interface WatcherLog {
   timestamp: string;
   type: "info" | "warning" | "critical" | "success";
@@ -51,7 +58,7 @@ export default function FundDashboard({
   // SSE for real-time funding updates
   useEffect(() => {
     const eventSource = new EventSource(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/funding/stream`
+      `${API_BASE_URL}/api/funding/stream`
     );
 
     eventSource.addEventListener("funding_update", (event) => {
@@ -89,7 +96,7 @@ export default function FundDashboard({
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/watcher/status`);
+        const res = await fetch(`${API_BASE_URL}/api/watcher/status`);
         if (res.ok) {
           const data = await res.json();
           setYieldRate(data.current_yield);
@@ -112,7 +119,7 @@ export default function FundDashboard({
 
   const handleSimulateCrash = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/simulate/crash`, {
+      const res = await fetch(`${API_BASE_URL}/api/simulate/crash`, {
         method: "POST",
       });
       

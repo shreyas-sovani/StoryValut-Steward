@@ -1,4 +1,17 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+// ============================================================================
+// RAILWAY BACKEND URL
+// ============================================================================
+// The backend runs ONLY on Railway (persistent Node.js server).
+// It is NOT deployed to Vercel serverless.
+// 
+// In production, this points directly to Railway.
+// In development, use localhost:3001 (set NEXT_PUBLIC_API_URL in .env.local)
+// ============================================================================
+export const API_BASE_URL = 
+  process.env.NEXT_PUBLIC_API_URL || 
+  (process.env.NODE_ENV === "production" 
+    ? "https://storyvalut-steward-production.up.railway.app" 
+    : "http://localhost:3001");
 
 export interface ChatMessage {
   role: "user" | "assistant";

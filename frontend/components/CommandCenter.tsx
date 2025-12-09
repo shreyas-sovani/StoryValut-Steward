@@ -6,6 +6,13 @@ import { clsx } from "clsx";
 import { QRCodeSVG } from "qrcode.react";
 import { LineChart, Line, AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
 
+// Railway backend URL (NOT Vercel serverless)
+const API_BASE_URL = 
+  process.env.NEXT_PUBLIC_API_URL || 
+  (process.env.NODE_ENV === "production" 
+    ? "https://storyvault-steward-production.up.railway.app" 
+    : "http://localhost:3001");
+
 interface FundingUpdate {
   type: string;
   status: string;
@@ -66,11 +73,11 @@ export default function CommandCenter({ walletAddress }: { walletAddress: string
 
   // Connect to SSE stream
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+    const apiUrl = API_BASE_URL;
     const streamUrl = `${apiUrl}/api/funding/stream`;
     
     console.log("🔌 CommandCenter: Connecting to SSE stream:", streamUrl);
-    console.log("📊 CommandCenter: API URL env var:", process.env.NEXT_PUBLIC_API_URL);
+    console.log("📊 CommandCenter: API URL:", API_BASE_URL);
     console.log("🌍 CommandCenter: NODE_ENV:", process.env.NODE_ENV);
     
     const eventSource = new EventSource(streamUrl);

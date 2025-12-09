@@ -110,7 +110,12 @@ const FRAXTAL_TOKENS = {
   sfrxUSD: "0xfc00000000000000000000000000000000000008", // sfrxUSD on Fraxtal
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+// Railway backend URL (NOT Vercel serverless)
+const API_BASE_URL = 
+  process.env.NEXT_PUBLIC_API_URL || 
+  (process.env.NODE_ENV === "production" 
+    ? "https://storyvalut-steward-production.up.railway.app" 
+    : "http://localhost:3001");
 
 // ============================================================================
 // ANIMATED STAT CARD
