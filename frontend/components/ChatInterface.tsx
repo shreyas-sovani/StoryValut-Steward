@@ -7,6 +7,13 @@ import { cn } from "@/lib/utils";
 import OpportunityCard from "@/components/OpportunityCard";
 import CommandCenter from "@/components/CommandCenterV2";
 
+// ============================================================================
+// ANTI-RECURSION GUARDS
+// These refs prevent the infinite loop caused by:
+// event → sendChatMessage → AI response → detector → dispatchEvent → repeat
+// ============================================================================
+const DEBOUNCE_MS = 5000; // Minimum 5 seconds between auto-triggered sends
+
 interface MonitoringData {
   active: boolean;
   asset: string;
@@ -85,6 +92,18 @@ export default function ChatInterface({
     yieldHistory: [],
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // ============================================================================
+  // ANTI-RECURSION REFS (prevent infinite loop)
+  // ============================================================================
+  const lastAutoSendRef = useRef<number>(0);      // Timestamp of last auto-triggered send
+  const sendLockRef = useRef<boolean>(false);     // Global lock to prevent concurrent sends
+  const isLoadingRef = useRef<boolean>(false);    // Ref version of isLoading for immediate checks
+
+  // Keep isLoadingRef in sync with state
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -102,10 +121,43 @@ export default function ChatInterface({
   }, [monitoring, onMonitoringUpdate]);
 
   // Listen for "Hire Steward" button clicks
+  // ⚠️ CRITICAL: This was causing infinite loops!
+  // Guards added to prevent: event → sendChatMessage → AI → detector → event → repeat
   useEffect(() => {
     const handleHireSteward = (event: CustomEvent) => {
+      const now = Date.now();
+      
+      // ============================================================================
+      // GUARD 1: Debounce - Prevent rapid re-triggering (min 5 seconds between sends)
+      // ============================================================================
+      if (now - lastAutoSendRef.current < DEBOUNCE_MS) {
+        console.log("🚫 [GUARD] Debounce: Ignoring hireSteward event (too soon)");
+        return;
+      }
+      
+      // ============================================================================
+      // GUARD 2: Check if already loading (using ref for immediate check)
+      // ============================================================================
+      if (isLoadingRef.current) {
+        console.log("🚫 [GUARD] Already loading: Ignoring hireSteward event");
+        return;
+      }
+      
+      // ============================================================================
+      // GUARD 3: Global send lock (prevents any concurrent sends)
+      // ============================================================================
+      if (sendLockRef.current) {
+        console.log("🚫 [GUARD] Send locked: Ignoring hireSteward event");
+        return;
+      }
+      
+      // All guards passed - proceed with send
+      lastAutoSendRef.current = now;
+      sendLockRef.current = true;
+      
+      console.log("✅ [GUARD] All checks passed, proceeding with hireSteward send");
+      
       const message = event.detail.message;
-      // Directly trigger the send action
       const userMessage: ChatMessage = {
         role: "user",
         content: message,
@@ -114,6 +166,7 @@ export default function ChatInterface({
 
       setMessages((prev) => [...prev, userMessage]);
       setIsLoading(true);
+      isLoadingRef.current = true;
       setStreamingContent("");
 
       let fullResponse = "";
@@ -125,6 +178,7 @@ export default function ChatInterface({
           if (chunk.type === "content" && chunk.content) {
             fullResponse += chunk.content;
             setStreamingContent(fullResponse);
+            // Note: Detectors may dispatch events, but guards will block re-entry
             detectMonitoringEvent(fullResponse);
             detectLeverageRecommendation(fullResponse);
             detectStrategyRecommendation(fullResponse);
@@ -140,6 +194,8 @@ export default function ChatInterface({
           setMessages((prev) => [...prev, assistantMessage]);
           setStreamingContent("");
           setIsLoading(false);
+          isLoadingRef.current = false;
+          sendLockRef.current = false; // Release lock on completion
         },
         (error) => {
           const errorMessage: ChatMessage = {
@@ -150,6 +206,8 @@ export default function ChatInterface({
           setMessages((prev) => [...prev, errorMessage]);
           setStreamingContent("");
           setIsLoading(false);
+          isLoadingRef.current = false;
+          sendLockRef.current = false; // Release lock on error
         }
       );
     };
