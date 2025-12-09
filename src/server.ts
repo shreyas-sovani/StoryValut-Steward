@@ -248,6 +248,27 @@ app.post("/api/chat", async (c) => {
     console.log(`   Session: ${sessionId}`);
     console.log(`   Message: "${messagePreview}${message && message.length > 80 ? '...' : ''}"`);
     
+    // ============================================================================
+    // ORIGIN GUARD - Block requests from deprecated Vercel deployments
+    // The old typo domain (story-valut-steward) is still sending spam requests.
+    // Block it here before touching rate limits or Gemini API.
+    // ============================================================================
+    const BLOCKED_ORIGINS = [
+      "story-valut-steward.vercel.app",  // Old typo domain causing spam
+    ];
+    
+    const isBlockedOrigin = BLOCKED_ORIGINS.some(blocked => 
+      origin.includes(blocked) || referer.includes(blocked)
+    );
+    
+    if (isBlockedOrigin) {
+      console.log(`🚫 [/api/chat] BLOCKED ORIGIN - Origin: ${origin}, Referer: ${referer}`);
+      return c.json({ 
+        error: "This deployment is deprecated. Please use the correct URL.",
+        blocked: true
+      }, 403);
+    }
+    
     // Rate limiting check
     const rateKey = `chat:${clientIp}`;
     const rateCheck = checkRateLimit(rateKey);
@@ -352,6 +373,25 @@ app.post("/api/chat/simple", async (c) => {
     console.log(`   Origin: ${origin}`);
     console.log(`   Session: ${sessionId}`);
     console.log(`   Message: "${messagePreview}${message && message.length > 80 ? '...' : ''}"`);
+    
+    // ============================================================================
+    // ORIGIN GUARD - Block requests from deprecated Vercel deployments
+    // ============================================================================
+    const BLOCKED_ORIGINS = [
+      "story-valut-steward.vercel.app",  // Old typo domain causing spam
+    ];
+    
+    const isBlockedOrigin = BLOCKED_ORIGINS.some(blocked => 
+      origin.includes(blocked) || referer.includes(blocked)
+    );
+    
+    if (isBlockedOrigin) {
+      console.log(`🚫 [/api/chat/simple] BLOCKED ORIGIN - Origin: ${origin}, Referer: ${referer}`);
+      return c.json({ 
+        error: "This deployment is deprecated. Please use the correct URL.",
+        blocked: true
+      }, 403);
+    }
     
     // Rate limiting check
     const rateKey = `chat:${clientIp}`;

@@ -143,12 +143,13 @@ export async function sendChatMessageSafe(
   // CLIENT-SIDE RATE LIMIT: Only 1 in-flight request at a time
   // ============================================================================
   if (chatInFlight) {
-    console.warn(`🚫 [${requestId}] [${callerName}] Chat request BLOCKED - another request already in flight`);
+    console.warn(`🚫 [${requestId}] [${callerName}] [session:${sessionId}] Chat request BLOCKED - another request already in flight`);
     onError("Another chat request is already in progress. Please wait.");
     return;
   }
   
-  console.log(`📤 [${requestId}] [${callerName}] Sending chat request at ${timestamp}`);
+  // Log caller tag and sessionId for linking frontend actions to server logs
+  console.log(`📤 [${requestId}] [${callerName}] [session:${sessionId}] Sending chat request at ${timestamp}`);
   console.log(`   Message preview: "${message.slice(0, 50)}${message.length > 50 ? '...' : ''}"`);
   
   chatInFlight = true;
@@ -160,18 +161,18 @@ export async function sendChatMessageSafe(
       onChunk,
       () => {
         chatInFlight = false;
-        console.log(`✅ [${requestId}] [${callerName}] Chat request COMPLETED`);
+        console.log(`✅ [${requestId}] [${callerName}] [session:${sessionId}] Chat request COMPLETED`);
         onComplete();
       },
       (error) => {
         chatInFlight = false;
-        console.error(`❌ [${requestId}] [${callerName}] Chat request FAILED:`, error);
+        console.error(`❌ [${requestId}] [${callerName}] [session:${sessionId}] Chat request FAILED:`, error);
         onError(error);
       }
     );
   } catch (error) {
     chatInFlight = false;
-    console.error(`❌ [${requestId}] [${callerName}] Chat request EXCEPTION:`, error);
+    console.error(`❌ [${requestId}] [${callerName}] [session:${sessionId}] Chat request EXCEPTION:`, error);
     onError(error instanceof Error ? error.message : "Unknown error");
   }
 }
@@ -211,11 +212,12 @@ export async function sendSimpleChatMessageSafe(
   
   // CLIENT-SIDE RATE LIMIT: Only 1 in-flight request at a time
   if (chatInFlight) {
-    console.warn(`🚫 [${requestId}] [${callerName}] Simple chat request BLOCKED - another request already in flight`);
+    console.warn(`🚫 [${requestId}] [${callerName}] [session:${sessionId}] Simple chat request BLOCKED - another request already in flight`);
     throw new Error("Another chat request is already in progress. Please wait.");
   }
   
-  console.log(`📤 [${requestId}] [${callerName}] Sending simple chat request at ${timestamp}`);
+  // Log caller tag and sessionId for linking frontend actions to server logs
+  console.log(`📤 [${requestId}] [${callerName}] [session:${sessionId}] Sending simple chat request at ${timestamp}`);
   console.log(`   Message preview: "${message.slice(0, 50)}${message.length > 50 ? '...' : ''}"`);
   
   chatInFlight = true;
@@ -233,7 +235,7 @@ export async function sendSimpleChatMessageSafe(
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    console.log(`✅ [${requestId}] [${callerName}] Simple chat request COMPLETED`);
+    console.log(`✅ [${requestId}] [${callerName}] [session:${sessionId}] Simple chat request COMPLETED`);
     return response.json();
   } finally {
     chatInFlight = false;
