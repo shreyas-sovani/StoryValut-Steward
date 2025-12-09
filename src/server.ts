@@ -92,6 +92,55 @@ setInterval(() => {
 const sessions = new Map<string, any>();
 
 // ============================================================================
+// DUPLICATE MESSAGE PROTECTION
+// Prevents the same message from being processed twice within 8 seconds.
+// Key: `${clientIp}:${messageHash}` -> Value: timestamp of last request
+// ============================================================================
+const recentMessages = new Map<string, number>();
+const DUPLICATE_WINDOW_MS = 8000; // 8 second window
+
+function isDuplicateMessage(clientIp: string, message: string): boolean {
+  const msgKey = `${clientIp}:${message.trim().slice(0, 80)}`;
+  const now = Date.now();
+  const lastSeen = recentMessages.get(msgKey);
+  
+  if (lastSeen && now - lastSeen < DUPLICATE_WINDOW_MS) {
+    return true; // Duplicate within window
+  }
+  
+  recentMessages.set(msgKey, now);
+  return false;
+}
+
+// Clean up old duplicate message entries every minute
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of recentMessages.entries()) {
+    if (now - timestamp > DUPLICATE_WINDOW_MS * 2) {
+      recentMessages.delete(key);
+    }
+  }
+}, 60000);
+
+// ============================================================================
+// PER-SESSION IN-FLIGHT GUARD
+// Prevents concurrent runner.ask() calls for the same session.
+// ============================================================================
+const sessionInFlight = new Map<string, boolean>();
+
+function isSessionBusy(sessionId: string): boolean {
+  return sessionInFlight.get(sessionId) === true;
+}
+
+function setSessionBusy(sessionId: string, busy: boolean): void {
+  if (busy) {
+    sessionInFlight.set(sessionId, true);
+  } else {
+    sessionInFlight.delete(sessionId);
+  }
+}
+
+// ============================================================================
 // AUTONOMOUS WATCHER STATE (Phase 8 - Micro-Investment Edition)
 // ============================================================================
 let current_yield = 4.5; // Default: Healthy 4.5% APY
@@ -249,24 +298,25 @@ app.post("/api/chat", async (c) => {
     console.log(`   Message: "${messagePreview}${message && message.length > 80 ? '...' : ''}"`);
     
     // ============================================================================
-    // ORIGIN GUARD - Block requests from deprecated Vercel deployments
-    // The old typo domain (story-valut-steward) is still sending spam requests.
-    // Block it here before touching rate limits or Gemini API.
+    // DUPLICATE MESSAGE PROTECTION - Block identical messages within 8 seconds
     // ============================================================================
-    const BLOCKED_ORIGINS = [
-      "story-valut-steward.vercel.app",  // Old typo domain causing spam
-    ];
-    
-    const isBlockedOrigin = BLOCKED_ORIGINS.some(blocked => 
-      origin.includes(blocked) || referer.includes(blocked)
-    );
-    
-    if (isBlockedOrigin) {
-      console.log(`🚫 [/api/chat] BLOCKED ORIGIN - Origin: ${origin}, Referer: ${referer}`);
+    if (isDuplicateMessage(clientIp, message || "")) {
+      console.log(`🚫 [/api/chat] DUPLICATE MESSAGE BLOCKED - IP: ${clientIp}, Message: "${messagePreview}"`);
       return c.json({ 
-        error: "This deployment is deprecated. Please use the correct URL.",
-        blocked: true
-      }, 403);
+        error: "Duplicate message detected. Please wait before sending the same message again.",
+        duplicate: true
+      }, 429);
+    }
+    
+    // ============================================================================
+    // PER-SESSION IN-FLIGHT GUARD - Block concurrent requests for same session
+    // ============================================================================
+    if (isSessionBusy(sessionId)) {
+      console.log(`🚫 [/api/chat] SESSION BUSY - Session: ${sessionId}, another request already in progress`);
+      return c.json({ 
+        error: "Another request is already being processed for this session. Please wait.",
+        busy: true
+      }, 429);
     }
     
     // Rate limiting check
@@ -292,6 +342,10 @@ app.post("/api/chat", async (c) => {
 
     // Stream the agent's response using SSE
     return streamSSE(c, async (stream) => {
+      // Mark session as busy BEFORE starting runner.ask()
+      setSessionBusy(sessionId, true);
+      console.log(`🔒 [CHAT_REQUEST] Session: ${sessionId}, IP: ${clientIp}, Message: "${messagePreview}"`);
+      
       try {
         // Send start event
         await stream.writeSSE({
@@ -318,9 +372,10 @@ app.post("/api/chat", async (c) => {
           event: "message",
         });
 
-        console.log(`✅ [${sessionId}] Response sent`);
+        console.log(`🔓 [CHAT_DONE] Session: ${sessionId}, Success: true`);
       } catch (error) {
         console.error(`❌ [${sessionId}] Error:`, error);
+        console.log(`🔓 [CHAT_DONE] Session: ${sessionId}, Success: false, Error: ${error instanceof Error ? error.message : "Unknown"}`);
         await stream.writeSSE({
           data: JSON.stringify({ 
             type: "error", 
@@ -329,6 +384,9 @@ app.post("/api/chat", async (c) => {
           }),
           event: "error",
         });
+      } finally {
+        // ALWAYS release the session lock
+        setSessionBusy(sessionId, false);
       }
     });
   } catch (error) {
@@ -375,22 +433,25 @@ app.post("/api/chat/simple", async (c) => {
     console.log(`   Message: "${messagePreview}${message && message.length > 80 ? '...' : ''}"`);
     
     // ============================================================================
-    // ORIGIN GUARD - Block requests from deprecated Vercel deployments
+    // DUPLICATE MESSAGE PROTECTION - Block identical messages within 8 seconds
     // ============================================================================
-    const BLOCKED_ORIGINS = [
-      "story-valut-steward.vercel.app",  // Old typo domain causing spam
-    ];
-    
-    const isBlockedOrigin = BLOCKED_ORIGINS.some(blocked => 
-      origin.includes(blocked) || referer.includes(blocked)
-    );
-    
-    if (isBlockedOrigin) {
-      console.log(`🚫 [/api/chat/simple] BLOCKED ORIGIN - Origin: ${origin}, Referer: ${referer}`);
+    if (isDuplicateMessage(clientIp, message || "")) {
+      console.log(`🚫 [/api/chat/simple] DUPLICATE MESSAGE BLOCKED - IP: ${clientIp}, Message: "${messagePreview}"`);
       return c.json({ 
-        error: "This deployment is deprecated. Please use the correct URL.",
-        blocked: true
-      }, 403);
+        error: "Duplicate message detected. Please wait before sending the same message again.",
+        duplicate: true
+      }, 429);
+    }
+    
+    // ============================================================================
+    // PER-SESSION IN-FLIGHT GUARD - Block concurrent requests for same session
+    // ============================================================================
+    if (isSessionBusy(sessionId)) {
+      console.log(`🚫 [/api/chat/simple] SESSION BUSY - Session: ${sessionId}, another request already in progress`);
+      return c.json({ 
+        error: "Another request is already being processed for this session. Please wait.",
+        busy: true
+      }, 429);
     }
     
     // Rate limiting check
@@ -414,16 +475,25 @@ app.post("/api/chat/simple", async (c) => {
     // Get or create agent session
     const { runner } = await getOrCreateSession(sessionId, clientIp);
 
-    // Get response
-    const response = await runner.ask(message);
+    // Mark session as busy BEFORE calling runner.ask()
+    setSessionBusy(sessionId, true);
+    console.log(`🔒 [CHAT_REQUEST_SIMPLE] Session: ${sessionId}, IP: ${clientIp}, Message: "${messagePreview}"`);
 
-    console.log(`✅ [${sessionId}] Response sent`);
+    try {
+      // Get response
+      const response = await runner.ask(message);
 
-    return c.json({
-      response,
-      sessionId,
-      timestamp: new Date().toISOString(),
-    });
+      console.log(`🔓 [CHAT_DONE_SIMPLE] Session: ${sessionId}, Success: true`);
+
+      return c.json({
+        response,
+        sessionId,
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      // ALWAYS release the session lock
+      setSessionBusy(sessionId, false);
+    }
   } catch (error) {
     console.error("❌ Simple chat endpoint error:", error);
     
