@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Flame, Wallet, Activity, AlertTriangle, CheckCircle, Info, Copy, QrCode, DollarSign, Zap, MessageCircle, Send, X, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { sendChatMessage, type ChatMessage } from "@/lib/api";
+import { sendChatMessageSafe, type ChatMessage, type SSEEvent } from "@/lib/api";
 
 // Railway backend URL (NOT Vercel serverless)
 const API_BASE_URL = 
@@ -154,10 +154,12 @@ export default function FundDashboard({
 
     let fullResponse = "";
 
-    await sendChatMessage(
+    // User-driven chat call - triggered by explicit button press in FundDashboard chat widget
+    await sendChatMessageSafe(
       userMessage.content,
       sessionId,
-      (chunk) => {
+      "FundDashboard:handleChatSend",
+      (chunk: SSEEvent) => {
         if (chunk.type === "content" && chunk.content) {
           fullResponse += chunk.content;
           // Update the last message or create a new streaming message
@@ -187,7 +189,7 @@ export default function FundDashboard({
         });
         setChatLoading(false);
       },
-      (error) => {
+      (error: string) => {
         // onError
         console.error("Chat error:", error);
         setChatMessages((prev) => [

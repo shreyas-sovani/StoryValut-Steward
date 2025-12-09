@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Send, Loader2, Sparkles, Activity } from "lucide-react";
-import { sendChatMessage, type ChatMessage, type SSEEvent } from "@/lib/api";
+import { sendChatMessageSafe, type ChatMessage, type SSEEvent } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import OpportunityCard from "@/components/OpportunityCard";
 import CommandCenter from "@/components/CommandCenterV2";
@@ -171,10 +171,13 @@ export default function ChatInterface({
 
       let fullResponse = "";
 
-      sendChatMessage(
+      // Disabled to prevent background /api/chat spam – only user-driven calls allowed.
+      // This hireSteward event is triggered by user clicking "Hire Steward" button.
+      sendChatMessageSafe(
         message,
         sessionId,
-        (chunk) => {
+        "ChatInterface:hireSteward",
+        (chunk: SSEEvent) => {
           if (chunk.type === "content" && chunk.content) {
             fullResponse += chunk.content;
             setStreamingContent(fullResponse);
@@ -197,7 +200,7 @@ export default function ChatInterface({
           isLoadingRef.current = false;
           sendLockRef.current = false; // Release lock on completion
         },
-        (error) => {
+        (error: string) => {
           const errorMessage: ChatMessage = {
             role: "assistant",
             content: `Error: ${error}`,
@@ -558,9 +561,11 @@ export default function ChatInterface({
 
     let fullResponse = "";
 
-    await sendChatMessage(
+    // User-driven chat call - triggered by explicit button press / form submit
+    await sendChatMessageSafe(
       userMessage.content,
       sessionId,
+      "ChatInterface:handleSend",
       (chunk: SSEEvent) => {
         if (chunk.type === "content" && chunk.content) {
           fullResponse += chunk.content;
@@ -680,7 +685,7 @@ export default function ChatInterface({
         setStreamingContent("");
         setIsLoading(false);
       },
-      (error) => {
+      (error: string) => {
         // Error
         const errorMessage: ChatMessage = {
           role: "assistant",

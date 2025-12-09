@@ -224,27 +224,47 @@ async function getOrCreateSession(sessionId: string, clientIp: string) {
 // POST /api/chat - Main chat endpoint with SSE streaming
 app.post("/api/chat", async (c) => {
   try {
-    // Rate limiting check
+    // ============================================================================
+    // DEBUG LOGGING - Track all incoming /api/chat requests
+    // This helps identify the source of excessive requests
+    // ============================================================================
+    const timestamp = new Date().toISOString();
     const clientIp = getRateLimitKey(c);
+    const userAgent = c.req.header("user-agent") || "unknown";
+    const origin = c.req.header("origin") || "unknown";
+    const referer = c.req.header("referer") || "unknown";
+    
+    // Parse body early for debug logging (before rate limit check)
+    const body = await c.req.json();
+    const { message, sessionId = "default" } = body;
+    const messagePreview = message ? message.slice(0, 80) : "(empty)";
+    
+    console.log(`\n📥 [/api/chat] INCOMING REQUEST`);
+    console.log(`   Timestamp: ${timestamp}`);
+    console.log(`   Client IP: ${clientIp}`);
+    console.log(`   User-Agent: ${userAgent.slice(0, 100)}`);
+    console.log(`   Origin: ${origin}`);
+    console.log(`   Referer: ${referer}`);
+    console.log(`   Session: ${sessionId}`);
+    console.log(`   Message: "${messagePreview}${message && message.length > 80 ? '...' : ''}"`);
+    
+    // Rate limiting check
     const rateKey = `chat:${clientIp}`;
     const rateCheck = checkRateLimit(rateKey);
     
     if (!rateCheck.allowed) {
-      console.log(`🚫 Rate limit exceeded for ${clientIp}`);
+      console.log(`🚫 [/api/chat] RATE LIMITED - IP: ${clientIp}, remaining: 0`);
       return c.json({ 
         error: "Rate limit exceeded. Please wait a minute before sending more messages.",
         retryAfter: 60 
       }, 429);
     }
-    
-    const body = await c.req.json();
-    const { message, sessionId = "default" } = body;
 
     if (!message) {
       return c.json({ error: "Message is required" }, 400);
     }
 
-    console.log(`💬 [${sessionId}] User: ${message.slice(0, 50)}... (IP: ${clientIp}, remaining: ${rateCheck.remaining})`);
+    console.log(`✅ [/api/chat] ACCEPTED - IP: ${clientIp}, remaining: ${rateCheck.remaining}`);
 
     // Get or create agent session
     const { runner } = await getOrCreateSession(sessionId, clientIp);
@@ -311,27 +331,45 @@ app.post("/api/chat", async (c) => {
 // POST /api/chat/simple - Simple non-streaming endpoint
 app.post("/api/chat/simple", async (c) => {
   try {
-    // Rate limiting check
+    // ============================================================================
+    // DEBUG LOGGING - Track all incoming /api/chat/simple requests
+    // ============================================================================
+    const timestamp = new Date().toISOString();
     const clientIp = getRateLimitKey(c);
+    const userAgent = c.req.header("user-agent") || "unknown";
+    const origin = c.req.header("origin") || "unknown";
+    const referer = c.req.header("referer") || "unknown";
+    
+    // Parse body early for debug logging
+    const body = await c.req.json();
+    const { message, sessionId = "default" } = body;
+    const messagePreview = message ? message.slice(0, 80) : "(empty)";
+    
+    console.log(`\n📥 [/api/chat/simple] INCOMING REQUEST`);
+    console.log(`   Timestamp: ${timestamp}`);
+    console.log(`   Client IP: ${clientIp}`);
+    console.log(`   User-Agent: ${userAgent.slice(0, 100)}`);
+    console.log(`   Origin: ${origin}`);
+    console.log(`   Session: ${sessionId}`);
+    console.log(`   Message: "${messagePreview}${message && message.length > 80 ? '...' : ''}"`);
+    
+    // Rate limiting check
     const rateKey = `chat:${clientIp}`;
     const rateCheck = checkRateLimit(rateKey);
     
     if (!rateCheck.allowed) {
-      console.log(`🚫 Rate limit exceeded for ${clientIp}`);
+      console.log(`🚫 [/api/chat/simple] RATE LIMITED - IP: ${clientIp}`);
       return c.json({ 
         error: "Rate limit exceeded. Please wait a minute before sending more messages.",
         retryAfter: 60 
       }, 429);
     }
-    
-    const body = await c.req.json();
-    const { message, sessionId = "default" } = body;
 
     if (!message) {
       return c.json({ error: "Message is required" }, 400);
     }
 
-    console.log(`💬 [${sessionId}] User: ${message.slice(0, 50)}... (IP: ${clientIp})`);
+    console.log(`✅ [/api/chat/simple] ACCEPTED - IP: ${clientIp}, remaining: ${rateCheck.remaining}`);
 
     // Get or create agent session
     const { runner } = await getOrCreateSession(sessionId, clientIp);

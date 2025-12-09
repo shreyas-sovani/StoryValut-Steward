@@ -13,6 +13,20 @@ export const API_BASE_URL =
     ? "https://storyvalut-steward-production.up.railway.app" 
     : "http://localhost:3001");
 
+// ============================================================================
+// CLIENT-SIDE RATE LIMITING / IN-FLIGHT PROTECTION
+// ============================================================================
+// Prevents multiple concurrent chat requests and spamming the backend.
+// Only one request can be in-flight at a time.
+// ============================================================================
+let chatInFlight = false;
+let chatRequestCounter = 0;
+
+function generateChatRequestId(): string {
+  chatRequestCounter++;
+  return `chat_${Date.now()}_${chatRequestCounter}`;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -33,9 +47,10 @@ export interface SimpleChatResponse {
 }
 
 /**
- * Send a chat message with SSE streaming
+ * INTERNAL: Send a chat message with SSE streaming (raw, no guards)
+ * Use sendChatMessageSafe instead for user-facing calls.
  */
-export async function sendChatMessage(
+async function _sendChatMessageInternal(
   message: string,
   sessionId: string,
   onChunk: (chunk: SSEEvent) => void,
@@ -99,25 +114,141 @@ export async function sendChatMessage(
 }
 
 /**
- * Send a chat message without streaming (simple mode)
+ * SAFE: Send a chat message with SSE streaming.
+ * 
+ * Enforces client-side rate limiting:
+ * - Only 1 in-flight request at a time
+ * - Ignores new calls if one is already in progress
+ * - Logs request ID, caller, and timestamp for debugging
+ * 
+ * @param message - The user message to send
+ * @param sessionId - The session ID for conversation context
+ * @param callerName - A label identifying which component is calling (for debugging)
+ * @param onChunk - Callback for SSE chunks
+ * @param onComplete - Callback when streaming is complete
+ * @param onError - Callback for errors
+ */
+export async function sendChatMessageSafe(
+  message: string,
+  sessionId: string,
+  callerName: string,
+  onChunk: (chunk: SSEEvent) => void,
+  onComplete: () => void,
+  onError: (error: string) => void
+): Promise<void> {
+  const requestId = generateChatRequestId();
+  const timestamp = new Date().toISOString();
+  
+  // ============================================================================
+  // CLIENT-SIDE RATE LIMIT: Only 1 in-flight request at a time
+  // ============================================================================
+  if (chatInFlight) {
+    console.warn(`🚫 [${requestId}] [${callerName}] Chat request BLOCKED - another request already in flight`);
+    onError("Another chat request is already in progress. Please wait.");
+    return;
+  }
+  
+  console.log(`📤 [${requestId}] [${callerName}] Sending chat request at ${timestamp}`);
+  console.log(`   Message preview: "${message.slice(0, 50)}${message.length > 50 ? '...' : ''}"`);
+  
+  chatInFlight = true;
+  
+  try {
+    await _sendChatMessageInternal(
+      message,
+      sessionId,
+      onChunk,
+      () => {
+        chatInFlight = false;
+        console.log(`✅ [${requestId}] [${callerName}] Chat request COMPLETED`);
+        onComplete();
+      },
+      (error) => {
+        chatInFlight = false;
+        console.error(`❌ [${requestId}] [${callerName}] Chat request FAILED:`, error);
+        onError(error);
+      }
+    );
+  } catch (error) {
+    chatInFlight = false;
+    console.error(`❌ [${requestId}] [${callerName}] Chat request EXCEPTION:`, error);
+    onError(error instanceof Error ? error.message : "Unknown error");
+  }
+}
+
+/**
+ * @deprecated Use sendChatMessageSafe instead for better rate limiting.
+ * This function is kept for backward compatibility but will be removed.
+ */
+export async function sendChatMessage(
+  message: string,
+  sessionId: string,
+  onChunk: (chunk: SSEEvent) => void,
+  onComplete: () => void,
+  onError: (error: string) => void
+): Promise<void> {
+  // Redirect to safe version with a generic caller name
+  // Disabled to prevent background /api/chat spam – only user-driven calls allowed.
+  console.warn("⚠️ sendChatMessage is deprecated. Use sendChatMessageSafe with a callerName for debugging.");
+  return sendChatMessageSafe(message, sessionId, "DEPRECATED_CALLER", onChunk, onComplete, onError);
+}
+
+/**
+ * SAFE: Send a chat message without streaming (simple mode)
+ * Enforces client-side rate limiting like sendChatMessageSafe.
+ * 
+ * @param message - The user message to send
+ * @param sessionId - The session ID for conversation context
+ * @param callerName - A label identifying which component is calling (for debugging)
+ */
+export async function sendSimpleChatMessageSafe(
+  message: string,
+  sessionId: string = "default",
+  callerName: string = "UNKNOWN"
+): Promise<SimpleChatResponse> {
+  const requestId = generateChatRequestId();
+  const timestamp = new Date().toISOString();
+  
+  // CLIENT-SIDE RATE LIMIT: Only 1 in-flight request at a time
+  if (chatInFlight) {
+    console.warn(`🚫 [${requestId}] [${callerName}] Simple chat request BLOCKED - another request already in flight`);
+    throw new Error("Another chat request is already in progress. Please wait.");
+  }
+  
+  console.log(`📤 [${requestId}] [${callerName}] Sending simple chat request at ${timestamp}`);
+  console.log(`   Message preview: "${message.slice(0, 50)}${message.length > 50 ? '...' : ''}"`);
+  
+  chatInFlight = true;
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/chat/simple`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message, sessionId }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    console.log(`✅ [${requestId}] [${callerName}] Simple chat request COMPLETED`);
+    return response.json();
+  } finally {
+    chatInFlight = false;
+  }
+}
+
+/**
+ * @deprecated Use sendSimpleChatMessageSafe instead for better rate limiting.
  */
 export async function sendSimpleChatMessage(
   message: string,
   sessionId: string = "default"
 ): Promise<SimpleChatResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/chat/simple`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ message, sessionId }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  return response.json();
+  console.warn("⚠️ sendSimpleChatMessage is deprecated. Use sendSimpleChatMessageSafe with a callerName.");
+  return sendSimpleChatMessageSafe(message, sessionId, "DEPRECATED_CALLER");
 }
 
 /**
