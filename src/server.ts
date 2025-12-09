@@ -33,6 +33,49 @@ dotenv.config();
 
 const app = new Hono();
 
+// ============================================================================
+// RATE LIMITING (Protect against DDoS / API abuse)
+// ============================================================================
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 20; // Max 20 chat requests per minute per IP
+const MAX_SESSIONS_PER_MINUTE = 10; // Max 10 new sessions per minute per IP
+
+function getRateLimitKey(c: any): string {
+  // Use X-Forwarded-For for Railway/proxied requests, fallback to remote address
+  const forwarded = c.req.header("x-forwarded-for");
+  const ip = forwarded ? forwarded.split(",")[0].trim() : "unknown";
+  return ip;
+}
+
+function checkRateLimit(key: string, maxRequests: number = MAX_REQUESTS_PER_WINDOW): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const record = rateLimitMap.get(key);
+  
+  if (!record || now > record.resetTime) {
+    // New window
+    rateLimitMap.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: maxRequests - 1 };
+  }
+  
+  if (record.count >= maxRequests) {
+    return { allowed: false, remaining: 0 };
+  }
+  
+  record.count++;
+  return { allowed: true, remaining: maxRequests - record.count };
+}
+
+// Clean up old rate limit entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of rateLimitMap.entries()) {
+    if (now > record.resetTime) {
+      rateLimitMap.delete(key);
+    }
+  }
+}, 300000);
+
 // Store agent runners by session
 const sessions = new Map<string, any>();
 
@@ -150,8 +193,15 @@ app.get("/health", (c) => {
 });
 
 // Initialize or get session
-async function getOrCreateSession(sessionId: string) {
+async function getOrCreateSession(sessionId: string, clientIp: string) {
   if (!sessions.has(sessionId)) {
+    // Rate limit new session creation
+    const sessionRateKey = `session:${clientIp}`;
+    const sessionRateCheck = checkRateLimit(sessionRateKey, MAX_SESSIONS_PER_MINUTE);
+    if (!sessionRateCheck.allowed) {
+      throw new Error("RATE_LIMIT_EXCEEDED: Too many new sessions. Please wait a minute.");
+    }
+    
     console.log(`📝 Creating new session: ${sessionId}`);
     const agentConfig = await createStoryStewardAgent();
     sessions.set(sessionId, agentConfig);
@@ -162,6 +212,19 @@ async function getOrCreateSession(sessionId: string) {
 // POST /api/chat - Main chat endpoint with SSE streaming
 app.post("/api/chat", async (c) => {
   try {
+    // Rate limiting check
+    const clientIp = getRateLimitKey(c);
+    const rateKey = `chat:${clientIp}`;
+    const rateCheck = checkRateLimit(rateKey);
+    
+    if (!rateCheck.allowed) {
+      console.log(`🚫 Rate limit exceeded for ${clientIp}`);
+      return c.json({ 
+        error: "Rate limit exceeded. Please wait a minute before sending more messages.",
+        retryAfter: 60 
+      }, 429);
+    }
+    
     const body = await c.req.json();
     const { message, sessionId = "default" } = body;
 
@@ -169,10 +232,10 @@ app.post("/api/chat", async (c) => {
       return c.json({ error: "Message is required" }, 400);
     }
 
-    console.log(`💬 [${sessionId}] User: ${message.slice(0, 50)}...`);
+    console.log(`💬 [${sessionId}] User: ${message.slice(0, 50)}... (IP: ${clientIp}, remaining: ${rateCheck.remaining})`);
 
     // Get or create agent session
-    const { runner } = await getOrCreateSession(sessionId);
+    const { runner } = await getOrCreateSession(sessionId, clientIp);
 
     // Stream the agent's response using SSE
     return streamSSE(c, async (stream) => {
@@ -217,6 +280,12 @@ app.post("/api/chat", async (c) => {
     });
   } catch (error) {
     console.error("❌ Chat endpoint error:", error);
+    
+    // Handle rate limit errors gracefully
+    if (error instanceof Error && error.message.includes("RATE_LIMIT_EXCEEDED")) {
+      return c.json({ error: error.message, retryAfter: 60 }, 429);
+    }
+    
     return c.json(
       { 
         error: "Failed to process message", 
@@ -230,6 +299,19 @@ app.post("/api/chat", async (c) => {
 // POST /api/chat/simple - Simple non-streaming endpoint
 app.post("/api/chat/simple", async (c) => {
   try {
+    // Rate limiting check
+    const clientIp = getRateLimitKey(c);
+    const rateKey = `chat:${clientIp}`;
+    const rateCheck = checkRateLimit(rateKey);
+    
+    if (!rateCheck.allowed) {
+      console.log(`🚫 Rate limit exceeded for ${clientIp}`);
+      return c.json({ 
+        error: "Rate limit exceeded. Please wait a minute before sending more messages.",
+        retryAfter: 60 
+      }, 429);
+    }
+    
     const body = await c.req.json();
     const { message, sessionId = "default" } = body;
 
@@ -237,10 +319,10 @@ app.post("/api/chat/simple", async (c) => {
       return c.json({ error: "Message is required" }, 400);
     }
 
-    console.log(`💬 [${sessionId}] User: ${message.slice(0, 50)}...`);
+    console.log(`💬 [${sessionId}] User: ${message.slice(0, 50)}... (IP: ${clientIp})`);
 
     // Get or create agent session
-    const { runner } = await getOrCreateSession(sessionId);
+    const { runner } = await getOrCreateSession(sessionId, clientIp);
 
     // Get response
     const response = await runner.ask(message);
@@ -254,6 +336,12 @@ app.post("/api/chat/simple", async (c) => {
     });
   } catch (error) {
     console.error("❌ Simple chat endpoint error:", error);
+    
+    // Handle rate limit errors gracefully
+    if (error instanceof Error && error.message.includes("RATE_LIMIT_EXCEEDED")) {
+      return c.json({ error: error.message, retryAfter: 60 }, 429);
+    }
+    
     return c.json(
       { 
         error: "Failed to process message", 
@@ -460,8 +548,8 @@ app.post("/api/rebalance", async (c) => {
     console.log("\n🔄 ====== REBALANCE REQUEST ======");
     console.log(`📊 Mock Volatility: ${(mockVol * 100).toFixed(1)}%`);
 
-    // Get or create agent session for reasoning
-    const { runner } = await getOrCreateSession("rebalance-session");
+    // Get or create agent session for reasoning (internal call, use "internal" as IP)
+    const { runner } = await getOrCreateSession("rebalance-session", "internal");
 
     // Step 1: Agent reasoning about the market crash
     const crashPrompt = `🚨 MARKET CRASH SIMULATION TRIGGERED!
