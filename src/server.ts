@@ -26,6 +26,49 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// ============================================================================
+// TURNSTILE CAPTCHA VERIFICATION (Minimal bot protection)
+// ============================================================================
+const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || "";
+const CAPTCHA_TTL_SECONDS = 600; // 10 minutes
+type VerRec = { expiresAt: number };
+const verifiedSessions = new Map<string, VerRec>();
+function vkey(ip: string, sid: string) { return `${ip}:${sid}`; }
+function setVerified(ip: string, sid: string, ttl = CAPTCHA_TTL_SECONDS) { 
+  verifiedSessions.set(vkey(ip, sid), { expiresAt: Date.now() + ttl * 1000 }); 
+}
+function isVerified(ip: string, sid: string) { 
+  const r = verifiedSessions.get(vkey(ip, sid)); 
+  if (!r) return false; 
+  if (Date.now() > r.expiresAt) { verifiedSessions.delete(vkey(ip, sid)); return false; } 
+  return true; 
+}
+// Clean up expired verified sessions every minute
+setInterval(() => { 
+  const now = Date.now(); 
+  for (const [k, v] of verifiedSessions.entries()) {
+    if (v.expiresAt < now) verifiedSessions.delete(k); 
+  }
+}, 60_000);
+
+async function verifyTurnstileToken(token: string, remoteip?: string): Promise<boolean> {
+  if (!TURNSTILE_SECRET) { console.error("Turnstile secret missing"); return false; }
+  if (!token) return false;
+  const params = new URLSearchParams();
+  params.append("secret", TURNSTILE_SECRET);
+  params.append("response", token);
+  if (remoteip) params.append("remoteip", remoteip);
+  try {
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+    const js = await res.json() as { success: boolean };
+    return !!js.success;
+  } catch (e) { console.error("Turnstile verify error", e); return false; }
+}
+
 /**
  * StoryVault Steward API Server
  * 
@@ -285,7 +328,7 @@ app.post("/api/chat", async (c) => {
     
     // Parse body early for debug logging (before rate limit check)
     const body = await c.req.json();
-    const { message, sessionId = "default" } = body;
+    const { message, sessionId = "default", captchaToken } = body;
     const messagePreview = message ? message.slice(0, 80) : "(empty)";
     
     console.log(`\n📥 [/api/chat] INCOMING REQUEST`);
@@ -296,6 +339,30 @@ app.post("/api/chat", async (c) => {
     console.log(`   Referer: ${referer}`);
     console.log(`   Session: ${sessionId}`);
     console.log(`   Message: "${messagePreview}${message && message.length > 80 ? '...' : ''}"`);
+
+    // ============================================================================
+    // TURNSTILE CAPTCHA CHECK - Block bots before expensive operations
+    // ============================================================================
+    // Block cron_ sessions from public origin
+    if (typeof sessionId === "string" && sessionId.startsWith("cron_") && (!c.req.header("x-internal-call"))) {
+      console.log(`🚫 [/api/chat] Blocked cron_ session from public origin`, clientIp, sessionId);
+      return c.json({ error: "forbidden" }, 403);
+    }
+    
+    // If not verified, require captchaToken and verify
+    if (!isVerified(clientIp, sessionId)) {
+      if (!captchaToken) {
+        console.log(`🚫 [/api/chat] Captcha required - IP: ${clientIp}, Session: ${sessionId}`);
+        return c.json({ error: "captcha_required" }, 403);
+      }
+      const ok = await verifyTurnstileToken(captchaToken, clientIp);
+      if (!ok) {
+        console.log(`🚫 [/api/chat] Captcha failed - IP: ${clientIp}, Session: ${sessionId}`);
+        return c.json({ error: "captcha_failed" }, 403);
+      }
+      setVerified(clientIp, sessionId);
+      console.log(`✅ [/api/chat] Captcha passed - IP: ${clientIp}, Session: ${sessionId}`);
+    };
     
     // ============================================================================
     // DUPLICATE MESSAGE PROTECTION - Block identical messages within 8 seconds
@@ -421,7 +488,7 @@ app.post("/api/chat/simple", async (c) => {
     
     // Parse body early for debug logging
     const body = await c.req.json();
-    const { message, sessionId = "default" } = body;
+    const { message, sessionId = "default", captchaToken } = body;
     const messagePreview = message ? message.slice(0, 80) : "(empty)";
     
     console.log(`\n📥 [/api/chat/simple] INCOMING REQUEST`);
@@ -431,6 +498,30 @@ app.post("/api/chat/simple", async (c) => {
     console.log(`   Origin: ${origin}`);
     console.log(`   Session: ${sessionId}`);
     console.log(`   Message: "${messagePreview}${message && message.length > 80 ? '...' : ''}"`);
+    
+    // ============================================================================
+    // TURNSTILE CAPTCHA CHECK - Block bots before expensive operations
+    // ============================================================================
+    // Block cron_ sessions from public origin
+    if (typeof sessionId === "string" && sessionId.startsWith("cron_") && (!c.req.header("x-internal-call"))) {
+      console.log(`🚫 [/api/chat/simple] Blocked cron_ session from public origin`, clientIp, sessionId);
+      return c.json({ error: "forbidden" }, 403);
+    }
+    
+    // If not verified, require captchaToken and verify
+    if (!isVerified(clientIp, sessionId)) {
+      if (!captchaToken) {
+        console.log(`🚫 [/api/chat/simple] Captcha required - IP: ${clientIp}, Session: ${sessionId}`);
+        return c.json({ error: "captcha_required" }, 403);
+      }
+      const ok = await verifyTurnstileToken(captchaToken, clientIp);
+      if (!ok) {
+        console.log(`🚫 [/api/chat/simple] Captcha failed - IP: ${clientIp}, Session: ${sessionId}`);
+        return c.json({ error: "captcha_failed" }, 403);
+      }
+      setVerified(clientIp, sessionId);
+      console.log(`✅ [/api/chat/simple] Captcha passed - IP: ${clientIp}, Session: ${sessionId}`);
+    }
     
     // ============================================================================
     // DUPLICATE MESSAGE PROTECTION - Block identical messages within 8 seconds

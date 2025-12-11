@@ -71,6 +71,29 @@ interface ChatInterfaceProps {
   onMonitoringUpdate?: (monitoringData: MonitoringData) => void;
 }
 
+// ============================================================================
+// TURNSTILE CAPTCHA (Minimal, invisible widget)
+// ============================================================================
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
+
+function ensureTurnstileRendered(siteKey: string, onToken: (t: string) => void) {
+  if (typeof window === "undefined" || !(window as any).turnstile) return;
+  const container = document.getElementById("turnstile-container");
+  if (!container || container.dataset.rendered) return;
+  (window as any).turnstile.render(container, {
+    sitekey: siteKey,
+    callback: (token: string) => { 
+      (window as any).lastCaptchaToken = token; 
+      onToken(token); 
+    },
+    "expired-callback": () => { 
+      (window as any).lastCaptchaToken = null; 
+      onToken(""); 
+    },
+  });
+  container.dataset.rendered = "1";
+}
+
 export default function ChatInterface({
   sessionId,
   onVaultDeployed,
@@ -84,6 +107,7 @@ export default function ChatInterface({
   const [showCommandCenter, setShowCommandCenter] = useState(false);
   const [commandCenterAddress, setCommandCenterAddress] = useState("");
   const [detectedStrategy, setDetectedStrategy] = useState<DetectedStrategy | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string>("");
   const [monitoring, setMonitoring] = useState<MonitoringData>({
     active: false,
     asset: "",
@@ -104,6 +128,26 @@ export default function ChatInterface({
   useEffect(() => {
     isLoadingRef.current = isLoading;
   }, [isLoading]);
+
+  // ============================================================================
+  // LOAD TURNSTILE SCRIPT (once on mount)
+  // ============================================================================
+  useEffect(() => {
+    const s = document.createElement("script");
+    s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+    s.async = true;
+    s.defer = true;
+    document.head.appendChild(s);
+    
+    // Render the widget once the script is loaded
+    s.onload = () => {
+      if (TURNSTILE_SITE_KEY) {
+        ensureTurnstileRendered(TURNSTILE_SITE_KEY, setCaptchaToken);
+      }
+    };
+    
+    return () => { /* leave script in head */ };
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -708,6 +752,12 @@ export default function ChatInterface({
 
   return (
     <>
+      {/* Hidden Turnstile container - renders captcha widget invisibly */}
+      <div 
+        id="turnstile-container" 
+        style={{ width: 1, height: 1, overflow: "hidden", opacity: 0, position: "absolute" }} 
+      />
+      
       {/* Command Center Mode */}
       {showCommandCenter ? (
         <CommandCenter walletAddress={commandCenterAddress} />

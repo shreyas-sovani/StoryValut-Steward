@@ -58,12 +58,17 @@ async function _sendChatMessageInternal(
   onError: (error: string) => void
 ): Promise<void> {
   try {
+    // Get captcha token from window if available
+    const captchaToken = (typeof window !== "undefined" && (window as any).lastCaptchaToken) 
+      ? (window as any).lastCaptchaToken 
+      : undefined;
+    
     const response = await fetch(`${API_BASE_URL}/api/chat`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ message, sessionId }),
+      body: JSON.stringify({ message, sessionId, captchaToken }),
     });
 
     if (!response.ok) {
@@ -223,12 +228,17 @@ export async function sendSimpleChatMessageSafe(
   chatInFlight = true;
   
   try {
+    // Get captcha token from window if available
+    const captchaToken = (typeof window !== "undefined" && (window as any).lastCaptchaToken) 
+      ? (window as any).lastCaptchaToken 
+      : undefined;
+    
     const response = await fetch(`${API_BASE_URL}/api/chat/simple`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ message, sessionId }),
+      body: JSON.stringify({ message, sessionId, captchaToken }),
     });
 
     if (!response.ok) {
